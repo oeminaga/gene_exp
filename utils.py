@@ -9,6 +9,13 @@ import cv2
 from PIL import Image
 import xml.etree.ElementTree as ET
 from openslide import OpenSlide
+import keras.backend as K
+import random
+from skimage import color, filters, morphology
+from skimage.morphology import square
+import skimage
+from skimage.measure import label, regionprops
+from skimage.segmentation import clear_border
 
 
 class OpenSlideOnlivePatch:
@@ -68,13 +75,13 @@ class OpenSlideOnlivePatch:
         '''
         print(filename)
         try:
-            image = OpenSlide(filename)
+            self.image = OpenSlide(filename)
             # temp = str(image.properties)[14:-1].replace("u'", "\"")
             # temp = temp.replace("'", r'"')
             # temp = json.loads(temp)
         except OSError:
             print(OSError.message)
-        return image
+        return self.image
 
     def LoadMask(self, filename, return_identity_list=False):
         LoadAll = False
@@ -83,6 +90,43 @@ class OpenSlideOnlivePatch:
 
         polygons = self.ExtractPolygons(ET.parse(filename).getroot(), return_identity_list=return_identity_list, LoadAll=LoadAll, select_criteria=self.select_criteria)
         return polygons
+
+    def _GettissueArea(self,level=3):
+        image = self.image.read_region((0, 0), level, self.img.level_dimensions[level])
+        image = np.asarray(image)
+        image = image[:, :, 0:3]
+        HE = color.rgb2hed(image)
+        BackgroundColor_0 = np.max(HE[0:10, 0:10, 2])
+        tissues = HE[:, :, 2]
+        tissues = filters.gaussian(tissues, 2)
+        tissues = tissues >= (BackgroundColor_0 * 0.99)
+        tissues = morphology.opening(tissues, square(10))
+        return tissues
+
+    def LoadTissueMask(self):
+        level_3 = self._GettissueArea(3)
+        level_2 = self._GettissueArea(2)
+
+        shape_To_convert = (self.image.level_dimensions[2][1], self.image.level_dimensions[2][0])
+        level_3_u = skimage.transform.resize(level_3, shape_To_convert)
+        level = level_3_u * level_2
+        cleared = clear_border(level)
+        label_image = label(cleared)
+        regions = regionprops(label_image)
+
+        level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[2])
+        minr, minc, maxr, maxc = regions[0].bbox
+        minr_new = minr * level_factor
+        minc_new = minc * level_factor
+
+        maxr_new = maxr * level_factor
+        maxc_new = maxc * level_factor
+
+        rect = (np.around((minr_new[1], minc_new[0], maxr_new[1] - minr_new[1], maxc_new[0] - minc_new[0]),
+                          decimals=0)).astype(np.int)
+
+        level_0 = skimage.transform.resize(regions[0].filled_image, shape_To_convert)
+        return level_0,  rect
 
     def GetLesionIdentity(self, xml_root, AttributeParameter="Description", AttributeValue="LCM"):
         '''
@@ -207,6 +251,59 @@ class OpenSlideOnlivePatch:
         else:
             return polys
 
+    def RandomRegionDefinition(self, mask, max_patch_number, patch_size):
+        '''
+        :param mask: mask image
+        :param max_patch_number: Define the batch size
+        :param patch_size: Define the patch dimension
+        :return: A list of X,Y coordinations randomly defined.
+        '''
+        dimension = mask.shape
+        reg_lst = []
+        counter = 0
+        total_size = patch_size[0] * patch_size[1]
+        while counter < max_patch_number:
+            x = random.randint(0, dimension[0] - patch_size[0])
+            y = random.randint(0, dimension[1] - patch_size[0])
+            mask_selected = mask[y:y + patch_size[1], x:x + patch_size[0]]
+            number_positive = np.count_nonzero(mask_selected)
+            percentage_positive = number_positive / total_size
+            if percentage_positive > 0.99:
+                reg_lst.append([x, y])
+                counter = counter + 1
+
+        return reg_lst
+
+    def GetPatches(self, image, mask, batch_size, patch_size):
+        '''
+        :param image: the original image
+        :param mask:  the mask (2-Dimension boolean)
+        :param batch_size: Define the batch size for this image 100
+        :param patch_size: the dimension of the patch (512, 512)
+        :return: patched images in numpy array (batch_size, height, width, channels.
+        '''
+        regions = self.RandomRegionDefinition(mask, batch_size, patch_size)
+        patch_imgs = np.zeros((batch_size, patch_size[0], patch_size[1], image.shape[2]), dtype=np.uint8)
+
+        for index, region in enumerate(regions):
+            x, y = region
+            patch_imgs[index] = image[y:y + patch_size[1], x:x + patch_size[0]].copy()
+        return patch_imgs
+
+    def GetPatchesAsFiles(self, image,mask, patch_per_image, patch_size, filename, type_data="train", n_class=""):
+        regions = self.RandomRegionDefinition(mask, patch_per_image, patch_size)
+        file_ex = os.path.basename(filename)
+        file_to_use = os.path.splitext(file_ex)[0]
+
+        x_file_path = self.image_folder + "/" + type_data + "/"+ n_class + "/"
+        counter = 0
+        for index, region in enumerate(regions):
+            x, y = region
+            x_file_path = x_file_path + "%s_%s.png" %(file_to_use, counter)
+            img = image[y:y + patch_size[1], x:x + patch_size[0]].copy()
+            cv2.imwrite(x_file_path, img)
+
+
     # Begin: Major functions (Also an example use for other functions listed above)
     def CreatePatchesToStoreAsFiles(self, filename, annotation_file):
         '''
@@ -215,8 +312,8 @@ class OpenSlideOnlivePatch:
         :param Debug: Not active
         :return: A log_report in numpy format.
         '''
-        mask_dir_to_store = self.image_folder
-        img_dir_to_store = self.mask_folder
+        img_dir_to_store = self.image_folder
+        mask_dir_to_store = self.mask_folder
 
         OpenSlide_obj = self.LoadImage(filename)
         file_ex = os.path.basename(filename)
@@ -305,6 +402,19 @@ class OpenSlideOnlivePatch:
 
             data_storage.append([file_to_use, id_itm, pix, maskimage])
         return data_storage
+
+    def GeneratePatchDirect(self, filename, patch_size=(512,512), batch_size=100):
+        self.LoadImage(filename)
+        level_0, region_def = self.LoadTissueMask()
+        image = self.image.read_region((region_def[1], region_def[0]), level=0, size=(region_def[3], region_def[2]))
+        patch_images = self.GetPatch(image, level_0, batch_size, patch_size)
+        return patch_images
+
+    def GeneratePatchDirectAsImagePatch(self, filename, patch_size=(512,512), batch_size=100, type_data="", n_class=""):
+        self.LoadImage(filename)
+        level_0, region_def = self.LoadTissueMask()
+        image = self.image.read_region((region_def[1], region_def[0]), level=0, size=(region_def[3], region_def[2]))
+        self.GetPatchesAsFiles(image, level_0, batch_size, patch_size, filename, type_data, n_class)
     # End Major functions
 
 class Filedirectoryamagement():
@@ -340,8 +450,153 @@ class Filedirectoryamagement():
                             list_of_files[filename] = os.sep.join([dirpath, filename])
         return list_of_files
 
-    def LoadFiles(self):
-        mask_files = self.GenerateFileListFromDirectory(self.mask_directories,self.mask_extension)
+    def LoadFiles(self, Mask=True):
         img_files = self.GenerateFileListFromDirectory(self.image_directories, self.img_extension)
-        self.files = self.FindMatchedImagesAndAnnotation(img_files, mask_files)
+        if Mask:
+            mask_files = self.GenerateFileListFromDirectory(self.mask_directories,self.mask_extension)
+            self.files = self.FindMatchedImagesAndAnnotation(img_files, mask_files)
+        else:
+            self.files = img_files
+            self.files = random.shuffle(self.files)
+
+    def GenerateKFoldValidation(self, k=5):
+        from sklearn.model_selection import KFold
+        kf = KFold(n_splits=k)
+        k_fold_validation_files = []
+        for train, test in kf.split(self.files.keys()):
+            k_fold_validation_files.append([train, test])
+        return k_fold_validation_files
+
+    def GetFilename(self, sample_id):
+        for fln in self.files[0]:
+            str_file = os.path.basename(fln)
+            str_file = os.path.splitext(str_file)[0]
+            if sample_id == str_file[0:15]:
+                return fln
+        return None
+
+    def generate_patch_images_train_valid_test(self, patch_per_image=100 , image_patch_size=(512,512), subset_ratio=[0.6,0.8,0.2], directory="", class_filename="", type_class_col="sample_type"):
+        train_length = int(round(len(self.files[0]) * subset_ratio[0]))
+        remaining = len(self.files[0]) - train_length
+        test_length = int(round(remaining * subset_ratio[1]))
+        valid_length = remaining - test_length
+
+        import pandas as pd
+        data = pd.read_csv(class_filename, index_col=0)
+
+        train_files = random.sample(self.files[0], train_length)
+        remaining = [e for e in self.files[0] if e not in train_files]
+        test_files = random.sample(remaining, test_length)
+        valid_files =  [e for e in remaining if e not in test_files]
+
+        files_subsection = [train_files, test_files, valid_files]
+        bdx = OpenSlideOnlivePatch(image_folder=directory)
+        #Sample id...
+        for (filelist) in files_subsection:
+            for filename in filelist:
+                str_file = os.path.basename(filename)
+                str_file = os.path.splitext(str_file)[0]
+                sample_id = str_file[0:15]
+                data.loc[sample_id, type_class_col]
+
+        for (sample_id, sample_type) in zip(sample_id_list, sample_type_list):
+            sampleid = sample_id[0:15]
+            filename = self.GetFilename(sample_id)
+            bdx.GeneratePatchDirectAsImagePatch(filename, image_patch_size, patch_per_image,)
+
+        bdx.GetPatchesAsFiles()
+        for i in range(0, len(self.files), batch_file_size):
+            count_files = i + batch_file_size
+            if count_files > len(self.files):
+                count_files = len(self.files)
+            self.batch_files = self.files[i:count_files]
+            np.zeros((img_patch_from_each_case,))
+
+
+
+    def image_generator_flow(self, generator, reconstruction=True, verbose=False, classify=False, spare_category=False,
+                             generate_weight=False, reshape=False, run_one_vs_all_mode=False, weights=None):
+        while 1:
+            if (verbose == True):
+                print("Loading the images...")
+            x_batch_tmp, y_batch_tmp = generator.next()
+
+            if (verbose == True):
+                print("Generate the batch images...")
+
+            if classify:
+                y_batch = np.zeros((y_batch_tmp.shape[0], self.nb_class), dtype=K.floatx())
+                for i, (y) in enumerate(y_batch_tmp):
+                    number_of_px = y.shape[0] * y.shape[1]
+                    np_flatted = y.flatten()
+                    y_indx = np.count_nonzero(np_flatted)
+                    batch_yy_class = 0
+                    y_per = y_indx / number_of_px
+
+                    if (self.nb_class == 2):
+                        if (y_indx > 0):
+                            batch_yy_class = 1
+                    # print(batch_yy_class)
+                    y_batch[i, batch_yy_class] = 1.
+            y_batches = []
+            if spare_category:
+                pass
+
+            if run_one_vs_all_mode:
+                # Background
+                y_batch_0 = np.zeros((y_batch_tmp.shape[0], y_batch_tmp.shape[1], y_batch_tmp.shape[2], 2),
+                                     dtype=K.floatx())
+                y_batch_0[:, :, :, 0] = np.add(y_batch_tmp[:, :, :, 1], y_batch_tmp[:, :, :, 2])
+                y_batch_0[:, :, :, 0] = y_batch_0[:, :, :, 0] > 0
+                y_batch_0[:, :, :, 1] = y_batch_tmp[:, :, :, 0]
+                y_batches.append(y_batch_0)
+                # Nucleous
+                y_batch_1 = np.zeros((y_batch_tmp.shape[0], y_batch_tmp.shape[1], y_batch_tmp.shape[2], 2),
+                                     dtype=K.floatx())
+                y_batch_1[:, :, :, 0] = np.add(y_batch_tmp[:, :, :, 0], y_batch_tmp[:, :, :, 2])
+                y_batch_1[:, :, :, 0] = y_batch_0[:, :, :, 0] > 0
+                y_batch_1[:, :, :, 1] = y_batch_tmp[:, :, :, 1]
+                y_batches.append(y_batch_1)
+                # Contour
+                y_batch_2 = np.zeros((y_batch_tmp.shape[0], y_batch_tmp.shape[1], y_batch_tmp.shape[2], 2),
+                                     dtype=K.floatx())
+                y_batch_2[:, :, :, 0] = np.add(y_batch_tmp[:, :, :, 0], y_batch_tmp[:, :, :, 1])
+                y_batch_2[:, :, :, 0] = y_batch_0[:, :, :, 0] > 0
+                y_batch_2[:, :, :, 1] = y_batch_tmp[:, :, :, 2]
+                y_batches.append(y_batch_2)
+
+                # for i in range(self.nb_class):
+                #    x_batches.append(x_batch_tmp.copy())
+            class_weights = None
+            if reshape:
+                batch_size = y_batch_tmp.shape[0]
+                y_batch_tmp = y_batch_tmp.reshape(
+                    (batch_size, self.target_size[0] * self.target_size[1], self.nb_class))
+            if generate_weight:
+                class_weights = np.zeros((self.args.batch_size, self.target_size[0] * self.target_size[1], 3))
+                class_weights[:, :, 0] += 0.5
+                class_weights[:, :, 1] += 1
+                class_weights[:, :, 2] += 1.5
+
+            if reconstruction:
+                # print(reconstruction)
+                # print("[x_batch_tmp, y_batch_tmp], [y_batch_tmp, x_batch_tmp]")
+                if generate_weight:
+                    yield ([x_batch_tmp, y_batch_tmp, class_weights], [y_batch_tmp, y_batch_tmp])
+                else:
+                    yield ([x_batch_tmp, y_batch_tmp], [y_batch_tmp, y_batch_tmp])
+            elif run_one_vs_all_mode:
+                if generate_weight:
+                    yield (x_batch_tmp, y_batches, class_weights)
+                else:
+                    yield (x_batch_tmp, y_batches)
+            else:
+                if generate_weight:
+                    yield (x_batch_tmp, y_batch_tmp, class_weights)
+                else:
+                    yield (x_batch_tmp, y_batch_tmp)
+
+
+
+
 
