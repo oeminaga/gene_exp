@@ -6,18 +6,554 @@
 import os
 import numpy as np
 import cv2
+import csv
+from matplotlib import pyplot as plt
+import math
+
 from PIL import Image
 import xml.etree.ElementTree as ET
 from openslide import OpenSlide
 import keras.backend as K
 import random
+
+from scipy.ndimage import gaussian_filter
 from skimage import color, filters, morphology
+from skimage.color import rgb2hsv, rgb2grey
+from skimage.exposure import rescale_intensity
 from skimage.morphology import square
 import skimage
 from skimage.measure import label, regionprops
 from skimage.segmentation import clear_border
+from keras import layers
+from scipy.ndimage.interpolation import map_coordinates
+#General functions
+#Batch Normalization
+def Conv2DBNSLU(x, filters, kernel_size=1, strides=1, padding='same', activation="relu", name=""):
+    x = layers.Conv2D(
+        filters,
+        kernel_size = kernel_size,
+        strides=strides,
+        padding=padding,
+        name=name,
+        use_bias=False)(x)
+    x = layers.BatchNormalization(scale=False)(x)
+    x = layers.Activation(activation)(x)
+    return x
+
+def make_folders(file_prefix, file_address):
+    if not file_prefix.startswith("/"):
+        file_prefix = "./" + file_prefix
+    folders = file_address.split("/")
+    if folders[-1] == "":
+        folders = folders[:-1]
+    current_add = ""
+    #print(folders)
+    for folder in folders:
+        for root, dirnames, filenames in os.walk(file_prefix + current_add):
+            if folder not in dirnames:
+                os.system("mkdir " + file_prefix + current_add + "/" + folder)
+            break
+        current_add += "/" + folder
+
+def EnhanceColor(img, clipLimit=12, tileGridSize=(10,10)):
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=clipLimit, tileGridSize=tileGridSize)
+    cl = clahe.apply(l)
+    limg = cv2.merge((cl,a,b))
+    img_c = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+    return img_c
+
+def stainspace_to_2d_array(ihc_xyz, channel):
+    rescale = rescale_intensity(ihc_xyz[:, :, channel], out_range=(0,1))
+    stain_array = np.dstack((np.zeros_like(rescale), rescale, rescale))
+    grey_array = rgb2grey(stain_array)
+    return grey_array
+
+def Convert_to_OD(rgb_255, normalized=False):
+    rgb_dec = (rgb_255+1.) / 256.
+    OD = -1 * np.log10(rgb_dec)
+    '''
+    if normalized:
+        p_squared_sum = (OD[:,:,0] ** 2) + (OD[:,:,1] ** 2) + (OD[:,:,1] ** 2)
+        OD[:,:,0] = OD[:,:,0] / (np.sqrt(p_squared_sum)+1e-7)
+        OD[:,:,1] = OD[:,:,1] / (np.sqrt(p_squared_sum)+1e-7)
+        OD[:,:,2] = OD[:,:,2] / (np.sqrt(p_squared_sum)+1e-7)
+    '''
+    return OD
+
+def Convert_to_HSV(rgb_255, normalized=False):
+    img = rgb2hsv(rgb_255)
+    #rgb_dec = (img+1.) / 256.
+    #print(np.min(rgb_dec))
+    #OD = -1 * np.log10(img)
+    '''
+    if normalized:
+        p_squared_sum = (OD[:,:,0] ** 2) + (OD[:,:,1] ** 2) + (OD[:,:,1] ** 2)
+        OD[:,:,0] = OD[:,:,0] / (np.sqrt(p_squared_sum)+1e-7)
+        OD[:,:,1] = OD[:,:,1] / (np.sqrt(p_squared_sum)+1e-7)
+        OD[:,:,2] = OD[:,:,2] / (np.sqrt(p_squared_sum)+1e-7)
+    '''
+    #plt.imshow(OD)
+    #plt.show()
+    return img
+
+def LN_normalize(arr):
+    """
+    Linear normalization
+    http://en.wikipedia.org/wiki/Normalization_%28image_processing%29
+    """
+    arr = arr.astype('float')
+    # Do not touch the alpha channel
+    for i in range(3):
+        minval = arr[...,i].min()
+        maxval = arr[...,i].max()
+        if minval != maxval:
+            arr[...,i] -= minval
+            arr[...,i] *= (255.0/(maxval-minval))
+    return arr
+
+def Convert_to_HRD(image):
+    from skimage.color import rgb2hed
+    ''''
+    img_new = np.zeros(image.shape, dtype='float')
+    rgb_from_hrd = np.array([[0.644, 0.710, 0.285],
+                    [0.0326, 0.873, 0.487],
+                    [0.270, 0.562, 0.781]])
+
+    #conv_matrix
+    hrd_from_rgb = linalg.inv(rgb_from_hrd)
+    #Seperate stain
+    ihc_hrd = separate_stains(image, hrd_from_rgb)
+
+    #img_new = LN_normalize(ihc_hrd)
+    #Stain space conversion
+    DAB_Grey_Array = stainspace_to_2d_array(ihc_hrd, 2)
+    Hema_Gray_Array = stainspace_to_2d_array(ihc_hrd, 0)
+    GBIred_Gray_Array = stainspace_to_2d_array(ihc_hrd, 1)
+    img_new = np.stack((Hema_Gray_Array, DAB_Grey_Array,GBIred_Gray_Array), axis=-1)
+    '''
+    ihc_hed = rgb2hed(image)
+    #stainspace_to_2d_array()
+    return ihc_hed
+
+def stainspace_to_2d_array(ihc_xyz, channel):
+    rescale = rescale_intensity(ihc_xyz[:, :, channel], out_range=(-1,1))
+    stain_array = np.dstack((np.zeros_like(rescale), rescale, rescale))
+    grey_array = rgb2grey(stain_array)
+    return grey_array
+
+def normalize_mapping(source_array, source_mean, target_mean):
+    for x in source_array:
+        x[...] = x/source_mean
+        x[...] = x * target_mean
+    return source_array
+
+def plot_log(filename, show=True):
+    # load data
+    keys = []
+    values = []
+    with open(filename, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if keys == []:
+                for key, value in row.items():
+                    keys.append(key)
+                    values.append(float(value))
+                continue
+
+            for _, value in row.items():
+                values.append(float(value))
+
+        values = np.reshape(values, newshape=(-1, len(keys)))
+        values[:,0] += 1
+
+    fig = plt.figure(figsize=(4,6))
+    fig.subplots_adjust(top=0.95, bottom=0.05, right=0.95)
+    fig.add_subplot(211)
+    for i, key in enumerate(keys):
+        if key.find('loss') >= 0 and not key.find('val') >= 0:  # training loss
+            plt.plot(values[:, 0], values[:, i], label=key)
+    plt.legend()
+    plt.title('Training loss')
+
+    fig.add_subplot(212)
+    for i, key in enumerate(keys):
+        if key.find('acc') >= 0:  # acc
+            plt.plot(values[:, 0], values[:, i], label=key)
+    plt.legend()
+    plt.title('Training and validation accuracy')
+
+    # fig.savefig('result/log.png')
+    if show:
+        plt.show()
+
+def combine_images(generated_images, height=None, width=None):
+    num = generated_images.shape[0]
+    if width is None and height is None:
+        width = int(math.sqrt(num))
+        height = int(math.ceil(float(num)/width))
+    elif width is not None and height is None:  # height not given
+        height = int(math.ceil(float(num)/width))
+    elif height is not None and width is None:  # width not given
+        width = int(math.ceil(float(num)/height))
+
+    shape = generated_images.shape[1:3]
+    image = np.zeros((height*shape[0], width*shape[1]),
+                     dtype=generated_images.dtype)
+    for index, img in enumerate(generated_images):
+        i = int(index/width)
+        j = index % width
+        image[i*shape[0]:(i+1)*shape[0], j*shape[1]:(j+1)*shape[1]] = \
+            img[:, :, 0]
+    return image
+
+def random_scale_img(img, mask, xy_range, lock_xy=False):
+    if random.random() > xy_range.chance:
+        return img, mask
 
 
+    if not isinstance(img, mask, list):
+        img = [img]
+        mask = [mask]
+
+    import cv2
+    scale_x = random.uniform(xy_range.x_min, xy_range.x_max)
+    scale_y = random.uniform(xy_range.y_min, xy_range.y_max)
+    if lock_xy:
+        scale_y = scale_x
+
+    org_height, org_width = img[0].shape[:2]
+    xy_range.last_x = scale_x
+    xy_range.last_y = scale_y
+
+    res_img = []
+    for img_inst in img:
+        scaled_width = int(org_width * scale_x)
+        scaled_height = int(org_height * scale_y)
+        scaled_img = cv2.resize(img_inst, (scaled_width, scaled_height), interpolation=cv2.INTER_CUBIC)
+        if scaled_width < org_width:
+            extend_left = (org_width - scaled_width) / 2
+            extend_right = org_width - extend_left - scaled_width
+            scaled_img = cv2.copyMakeBorder(scaled_img, 0, 0, extend_left, extend_right, borderType=cv2.BORDER_CONSTANT)
+            scaled_width = org_width
+
+        if scaled_height < org_height:
+            extend_top = (org_height - scaled_height) / 2
+            extend_bottom = org_height - extend_top - scaled_height
+            scaled_img = cv2.copyMakeBorder(scaled_img, extend_top, extend_bottom, 0, 0,  borderType=cv2.BORDER_CONSTANT)
+            scaled_height = org_height
+
+        start_x = (scaled_width - org_width) / 2
+        start_y = (scaled_height - org_height) / 2
+        tmp = scaled_img[start_y: start_y + org_height, start_x: start_x + org_width]
+        res_img.append(tmp)
+
+    res_mask = []
+    for img_inst in mask:
+        scaled_width = int(org_width * scale_x)
+        scaled_height = int(org_height * scale_y)
+        scaled_img = cv2.resize(
+            img_inst, (scaled_width, scaled_height), interpolation=cv2.INTER_CUBIC)
+        if scaled_width < org_width:
+            extend_left = (org_width - scaled_width) / 2
+            extend_right = org_width - extend_left - scaled_width
+            scaled_img = cv2.copyMakeBorder(
+                scaled_img, 0, 0, extend_left, extend_right, borderType=cv2.BORDER_CONSTANT)
+            scaled_width = org_width
+
+        if scaled_height < org_height:
+            extend_top = (org_height - scaled_height) / 2
+            extend_bottom = org_height - extend_top - scaled_height
+            scaled_img = cv2.copyMakeBorder(
+                scaled_img, extend_top, extend_bottom, 0, 0,  borderType=cv2.BORDER_CONSTANT)
+            scaled_height = org_height
+
+        start_x = (scaled_width - org_width) / 2
+        start_y = (scaled_height - org_height) / 2
+        tmp = scaled_img[start_y: start_y +
+                         org_height, start_x: start_x + org_width]
+        res_img.append(tmp)
+
+    return res_img, res_mask
+# Add others as needed
+probs = {'keep': 0.1,'elastic': 0.9}
+def apply_transform(image, mask, img_target_cols):
+        #prob_value = np.random.uniform(0, 1)
+        #if prob_value > probs['keep']:
+            # You can add your own logic here.
+        sigma = np.random.uniform(img_target_cols * 0.20, img_target_cols * 0.20)
+        image = elastic_transform(image, img_target_cols, sigma)
+        mask = elastic_transform(mask, img_target_cols, sigma)
+
+        # Add other transforms here as needed. It will cycle through available transforms with give probs
+
+        #mask = mask.astype('float32') / 255.
+        return image, mask
+
+def elastic_transform(image, alpha, sigma, random_state=None):
+    """Elastic deformation of images as described in [Simard2003]_.
+    .. [Simard2003] Simard, Steinkraus and Platt, "Best Practices for
+       Convolutional Neural Networks applied to Visual Document Analysis", in
+       Proc. of the International Conference on Document Analysis and
+       Recognition, 2003.
+    """
+    assert len(image.shape) == 3
+
+    image_d = image.copy()
+    if random_state is None:
+        random_state = np.random.RandomState(None)
+
+    shape = image.shape[0:2]
+
+    for i in range(image.shape[2]):
+        dx = gaussian_filter((random_state.rand(*shape) * 2 - 1),
+                            sigma, mode="constant", cval=0) * alpha
+        dy = gaussian_filter((random_state.rand(*shape) * 2 - 1),
+                            sigma, mode="constant", cval=0) * alpha
+
+        x, y = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]), indexing='ij')
+        indices = np.reshape(x+dx, (-1, 1)), np.reshape(y+dy, (-1, 1))
+        image_d[:,:,i] = map_coordinates(image[:,:,i], indices, order=1).reshape(shape)
+
+    return image_d
+
+def image_generator_flow(generator,
+                         reconstruction=False,
+                         verbose=False,
+                         classify=False,
+                         spare_category=False,
+                         class_to_mask=False,
+                         generate_weight=False,
+                         reshape=False,
+                         run_one_vs_all_mode=False,
+                         nb_class=2,
+                         target_size=(64,64),
+                         batch_size=30):
+    while 1:
+        if (verbose == True):
+            print("Loading the images...")
+        x_batch_tmp, y_batch_tmp = generator.next()
+
+        if (verbose == True):
+            print("Generate the batch images...")
+
+        if classify:
+            y_batch = np.zeros((y_batch_tmp.shape[0], nb_class), dtype=K.floatx())
+            for i, (y) in enumerate(y_batch_tmp):
+                number_of_px = y.shape[0] * y.shape[1]
+                np_flatted = y.flatten()
+                y_indx = np.count_nonzero(np_flatted)
+                batch_yy_class = 0
+                y_per = y_indx / number_of_px
+
+                if (nb_class == 2):
+                    if (y_indx > 0):
+                        batch_yy_class = 1
+                # print(batch_yy_class)
+                y_batch[i, batch_yy_class] = 1.
+        y_batches = []
+        if spare_category:
+            pass
+
+        if class_to_mask:
+            y_batches = np.zeros((y_batch_tmp.shape[0], target_size[0], target_size[1], nb_class), dtype=K.floatX())
+            for i, (y) in enumerate(y_batch_tmp):
+                y_batch_itm = np.zeros(target_size[0], target_size[1], nb_class)
+                y_batch_itm[:,:,y] = 1.
+                y_batches[i] = y_batch_itm
+
+        if run_one_vs_all_mode:
+            # Background
+            y_batch_0 = np.zeros((y_batch_tmp.shape[0], y_batch_tmp.shape[1], y_batch_tmp.shape[2], 2),
+                                     dtype=K.floatx())
+            y_batch_0[:, :, :, 0] = np.add(y_batch_tmp[:, :, :, 1], y_batch_tmp[:, :, :, 2])
+            y_batch_0[:, :, :, 0] = y_batch_0[:, :, :, 0] > 0
+            y_batch_0[:, :, :, 1] = y_batch_tmp[:, :, :, 0]
+            y_batches.append(y_batch_0)
+            # Nucleous
+            y_batch_1 = np.zeros((y_batch_tmp.shape[0], y_batch_tmp.shape[1], y_batch_tmp.shape[2], 2),dtype=K.floatx())
+            y_batch_1[:, :, :, 0] = np.add(y_batch_tmp[:, :, :, 0], y_batch_tmp[:, :, :, 2])
+            y_batch_1[:, :, :, 0] = y_batch_0[:, :, :, 0] > 0
+            y_batch_1[:, :, :, 1] = y_batch_tmp[:, :, :, 1]
+            y_batches.append(y_batch_1)
+            # Contour
+            y_batch_2 = np.zeros((y_batch_tmp.shape[0], y_batch_tmp.shape[1], y_batch_tmp.shape[2], 2),dtype=K.floatx())
+            y_batch_2[:, :, :, 0] = np.add(y_batch_tmp[:, :, :, 0], y_batch_tmp[:, :, :, 1])
+            y_batch_2[:, :, :, 0] = y_batch_0[:, :, :, 0] > 0
+            y_batch_2[:, :, :, 1] = y_batch_tmp[:, :, :, 2]
+            y_batches.append(y_batch_2)
+
+            # for i in range(self.nb_class):
+            #    x_batches.append(x_batch_tmp.copy())
+        class_weights = None
+        if reshape:
+            batch_size = y_batch_tmp.shape[0]
+            y_batch_tmp = y_batch_tmp.reshape((batch_size, target_size[0] * target_size[1], nb_class))
+        if generate_weight:
+            class_weights = np.zeros((batch_size, target_size[0] * target_size[1], 3))
+            class_weights[:, :, 0] += 0.5
+            class_weights[:, :, 1] += 1
+            class_weights[:, :, 2] += 1.5
+
+        if reconstruction:
+            # print(reconstruction)
+            # print("[x_batch_tmp, y_batch_tmp], [y_batch_tmp, x_batch_tmp]")
+            if generate_weight:
+                yield ([x_batch_tmp, y_batch_tmp, class_weights], [y_batch_tmp, y_batch_tmp])
+            else:
+                yield ([x_batch_tmp, y_batch_tmp], [y_batch_tmp, y_batch_tmp])
+        elif run_one_vs_all_mode:
+            if generate_weight:
+                yield (x_batch_tmp, y_batches, class_weights)
+            else:
+                yield (x_batch_tmp, y_batches)
+        elif class_to_mask:
+            yield ([x_batch_tmp, y_batches], [y_batches, x_batch_tmp])
+        else:
+            if generate_weight:
+                yield (x_batch_tmp, y_batch_tmp, class_weights)
+            else:
+                yield (x_batch_tmp, y_batch_tmp)
+
+
+def image_generator(generator, use_cropping=False, input_shape=(256, 256, 3), cropping_size=(128, 128),verbose=False, reconstruction=True, test_mode=False, batch_size=30, number_of_class=2):
+    size = cropping_size[0] * cropping_size[1]
+    while 1:
+        if (verbose == True):
+            print("Loading the images...")
+        x_batch_tmp, y_batch_tmp = generator.next()
+        # np.save("test.np", x_batch_tmp)
+        # exit()
+        # print(x_batch_tmp.shape)
+        if (verbose == True):
+            print("Generate the batch images...")
+
+        x_batch_cropped = None
+        y_batch_cropped = None
+        itm_list_coordination = None
+        if (use_cropping):
+            b_x_batch_cropped = None
+            b_y_batch_cropped = None
+            if test_mode:
+                coordinations = [(0, 0)]
+            else:
+                coordinations = ((0, 0),
+                                 (int(round(cropping_size[0] / 2.)), 0),
+                                 (0, int(round(cropping_size[1] / 2.))),
+                                 (int(round(cropping_size[0] / 2.)), int(round(cropping_size[1] / 2.))),
+                                 (int(round(cropping_size[0] / 4.)), 0),
+                                 (0, int(round(cropping_size[1] / 4.))),
+                                 (int(round(cropping_size[0] / 4.)), int(round(cropping_size[1] / 4.))))
+            # Generate image patches with different off set
+            for coord in coordinations:
+                itm_list_coordination = self.CropLayers(input_shape=input_shape, cropping_size=cropping_size,
+                                                        off_set=coord)
+                # Get the image patches
+                for itm in itm_list_coordination:
+                    if (b_x_batch_cropped is None):
+                        b_x_batch_cropped = x_batch_tmp[:, itm[0]:itm[1], itm[2]:itm[3], :]
+                        b_y_batch_cropped = y_batch_tmp[:, itm[0]:itm[1], itm[2]:itm[3], :]
+                    else:
+                        b_x_batch_cropped = np.append(b_x_batch_cropped,
+                                                      x_batch_tmp[:, itm[0]:itm[1], itm[2]:itm[3], :], axis=0)
+                        b_y_batch_cropped = np.append(b_y_batch_cropped,
+                                                      y_batch_tmp[:, itm[0]:itm[1], itm[2]:itm[3], :], axis=0)
+
+                        # Assign to y_batch_cropped
+            x_batch_cropped = b_x_batch_cropped
+            y_batch_cropped = b_y_batch_cropped
+        else:
+            y_batch_cropped = y_batch_tmp
+            x_batch_cropped = x_batch_tmp
+
+        # print(x_batch_cropped.shape)
+        # Generate batch to deliver
+        length_b = x_batch_cropped.shape[0]
+        sequence = int(round(length_b / self.args.batch_size))
+        if test_mode and use_cropping:
+            yield x_batch_cropped, y_batch_cropped, itm_list_coordination
+        else:
+            for range_x in range(0, sequence):
+                begin_index = range_x * self.args.batch_size
+                end_index = (range_x + 1) * self.args.batch_size
+
+                if ((range_x + 1) == sequence):
+                    end_index = length_b
+
+                x_batch_ = x_batch_cropped[begin_index:end_index, :, :, :]
+                y_batch_ = x_batch_cropped[begin_index:end_index, :, :, :]
+
+                difference = end_index - begin_index
+
+                # Fill the gap with random images
+                if difference < batch_size:
+                    number_itm = difference - batch_size
+                    selected_randomly_to_fill_the_gap = np.random.choice(length_b, number_itm)
+
+                    for x_index in selected_randomly_to_fill_the_gap:
+                        x_batch_ = np.append(x_batch_, x_batch_cropped[x_index], axis=0)
+                        y_batch_ = np.append(y_batch_, x_batch_cropped[x_index], axis=0)
+
+                counter = 0
+                zeros_img = []
+                ones_img = []
+                # Find zeros patchs --> may skew the training effect.
+                for xindex in range(0, len(x_batch_) - 1):
+                    if (np.count_nonzero(x_batch_[xindex, :, :, 0]) < (size * 0.50)):
+                        zeros_img.append(counter)
+                    else:
+                        ones_img.append(counter)
+                    counter = 1 + counter
+
+                # Replace zeros patchs with patch having non-zero pixels in > 50%.
+                for x_index_zeros in zeros_img:
+                    random_selection_index = np.random.choice(ones_img)
+                    x_batch_[x_index_zeros] = x_batch_[random_selection_index]
+                    y_batch_[x_index_zeros] = y_batch_[random_selection_index]
+
+                # Generate the labels for these patch images
+                y_batch = np.zeros((x_batch_.shape[0], number_of_class), dtype=K.floatx())
+                for i, (y) in enumerate(y_batch_):
+                    number_of_px = y.shape[0] * y.shape[1]
+                    np_flatted = y.flatten()
+                    y_indx = np.count_nonzero(np_flatted)
+                    batch_yy_class = 0
+                    y_per = y_indx / number_of_px
+                    if (number_of_class == 3):
+                        if (y_per > 0.5):
+                            batch_yy_class = 1
+                        elif (y_per <= 0.5 and y_per > 0.2):
+                            batch_yy_class = 2
+                    elif (number_of_class == 2):
+                        if (y_per > 0.5):
+                            batch_yy_class = 1
+                    y_batch[i, batch_yy_class] = 1.
+
+                # x = y_batch_cropped - np.mean(y_batch_cropped)
+                # Center by mean
+                # Calculate Prinicpal components...
+                # x = x_batch_cropped
+                # flat_x = np.reshape(x, (x.shape[0], x.shape[1] * x.shape[2] * x.shape[3]))
+                # sigma = np.dot(flat_x.T, flat_x) / flat_x.shape[0]
+                # u, s, _ = linalg.svd(sigma)
+                # principal_components = np.dot(np.dot(u, np.diag(1. / np.sqrt(s + 1e-6))), u.T)
+                # if principal_components is not None:
+                #    flatx = np.reshape(x, (-1, np.prod(x.shape[-3:])))
+                # whitex = np.dot(flatx, principal_components)
+                # x_batch_cropped = np.reshape(whitex, x_batch_cropped.shape)
+                # print(x_batch)
+                # print(y_batch)
+                # print(x_batch.shape)
+                if (verbose == True):
+                    print(range_x)
+                if reconstruction:
+                    yield ([x_batch_[:, :, :, 0:2], y_batch], [y_batch, x_batch_[:, :, :, 0:2]])  # y_batch_[:,:,:,0]])
+                else:
+                    yield ([x_batch_, y_batch])
+
+
+#End General function
 class OpenSlideOnlivePatch:
     def __init__(self, image_folder, mask_folder=None, select_criteria=None, clipped=False, zooming_level=40, target_zooming=40, annotation_zooming_level=10, split_text_annotation=""):
         '''
@@ -297,6 +833,8 @@ class OpenSlideOnlivePatch:
 
         x_file_path = self.image_folder + "/" + type_data + "/"+ n_class + "/"
         counter = 0
+        str_input_path = "/%s/%s/" % (type_data, n_class)
+        make_folders(self.image_folder, str_input_path)
         for index, region in enumerate(regions):
             x, y = region
             x_file_path = x_file_path + "%s_%s.png" %(file_to_use, counter)
@@ -418,7 +956,14 @@ class OpenSlideOnlivePatch:
     # End Major functions
 
 class Filedirectoryamagement():
-    def __int__(self, mask_directories, image_directories, image_extension=[".svs", ".tiff"], mask_extension=[".xml"]):
+    def __init__(self, mask_directories, image_directories, image_extension=[".svs", ".tiff"], mask_extension=[".xml"]):
+        '''
+        :param mask_directories:
+        :param image_directories:
+        :param image_extension:
+        :param mask_extension:
+        :return:
+        '''
         self.mask_directories = mask_directories
         self.image_directories = image_directories
         self.img_extension = image_extension
@@ -487,32 +1032,22 @@ class Filedirectoryamagement():
         train_files = random.sample(self.files[0], train_length)
         remaining = [e for e in self.files[0] if e not in train_files]
         test_files = random.sample(remaining, test_length)
-        valid_files =  [e for e in remaining if e not in test_files]
+        valid_files = [e for e in remaining if e not in test_files]
 
-        files_subsection = [train_files, test_files, valid_files]
+        files_subsection = {'train':train_files, 'test': test_files, 'valid': valid_files}
         bdx = OpenSlideOnlivePatch(image_folder=directory)
-        #Sample id...
-        for (filelist) in files_subsection:
+        #Determine the subclass to generate the directories.
+        list_of_unique_value = pd.Series(data.CNV_Status, name='CNV_Status').unique()
+        print("subclasses are ",list_of_unique_value)
+        for type_data in files_subsection.keys():
+            filelist = files_subsection[type_data]
             for filename in filelist:
                 str_file = os.path.basename(filename)
                 str_file = os.path.splitext(str_file)[0]
                 sample_id = str_file[0:15]
-                data.loc[sample_id, type_class_col]
+                class_type = data.loc[sample_id, type_class_col]
 
-        for (sample_id, sample_type) in zip(sample_id_list, sample_type_list):
-            sampleid = sample_id[0:15]
-            filename = self.GetFilename(sample_id)
-            bdx.GeneratePatchDirectAsImagePatch(filename, image_patch_size, patch_per_image,)
-
-        bdx.GetPatchesAsFiles()
-        for i in range(0, len(self.files), batch_file_size):
-            count_files = i + batch_file_size
-            if count_files > len(self.files):
-                count_files = len(self.files)
-            self.batch_files = self.files[i:count_files]
-            np.zeros((img_patch_from_each_case,))
-
-
+                bdx.GeneratePatchDirectAsImagePatch(filename, image_patch_size, patch_per_image, type_data, class_type)
 
     def image_generator_flow(self, generator, reconstruction=True, verbose=False, classify=False, spare_category=False,
                              generate_weight=False, reshape=False, run_one_vs_all_mode=False, weights=None):
