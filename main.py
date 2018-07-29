@@ -1,18 +1,315 @@
 import keras
 from openslide import OpenSlide
-import model
+from sklearn.externals import joblib
+
+from model import GeneExpressionLevel
 import utils
-def GeneratePatchImages(arg):
+import tensorflow as tf_X
+import keras
+import metrics
+from keras import optimizers
+from keras.utils.vis_utils import plot_model
+from keras.preprocessing.image import ImageDataGenerator
+from keras import callbacks
+import numpy as np
+import os
+import loss_functions
+import keras.backend as K
+
+def GeneratePatchImages(args):
     print("Proc: Running the patch images")
     file_manager = utils.Filedirectoryamagement(None, image_directories=arg.source)
     file_manager.generate_patch_images_train_valid_test(patch_per_image=100, image_patch_size=(512,512), directory=arg.destination, class_filename="sample_cnv.csv", type_class_col="CNV_Status")
     print("Done: Patch processing...")
 
-def train():
-    pass
+def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=False, load_mask=False):
+    print('-' * 30 + 'Begin: training ' + '-' * 30)
+    train_data_datagen = ImageDataGenerator()
+    valid_data_datagen = ImageDataGenerator()
+    seed = 1
+    # Prepare generators..
+    if (load_augmented_data):
+        print("loading the previous augmented data...")
+        valid_img_dataset = np.load('./test_augmented_data_img.npy')
+        valid_mask_dataset = np.load('./test_augmented_data_mask.npy')
+        train_img_dataset = np.load('./train_augmented_data_img.npy')
+        train_mask_dataset = np.load('./train_augmented_data_mask.npy')
+        print("training set: ", train_img_dataset.shape)
+        print("validation set: ", valid_img_dataset.shape)
+        train_input_generator = train_data_datagen.flow(train_img_dataset, train_mask_dataset, batch_size=args.batch_size)
+        valid_input_generator = valid_data_datagen.flow(valid_img_dataset, valid_mask_dataset, batch_size=args.batch_size)
+    elif (Load_numpy):
+        print("Proc: Loading the image list...")
+        train_img_dataset = np.load('./train_img_dataset_32.pkl.npy')
+        train_mask_dataset = np.load('./train_mask_dataset_32.pkl.npy')
+        train_img_dataset, train_mask_dataset = utils.PrepareData(train_img_dataset, train_mask_dataset, "train",
+                                                                     args.input_shape,
+                                                                     color_normalization=args.color)
+        print("train image number:", train_img_dataset.shape[0])
+        valid_img_dataset = np.load('./valid_img_dataset_32.pkl.npy')
+        valid_mask_dataset = np.load('./valid_mask_dataset_32.pkl.npy')
+        valid_img_dataset, valid_mask_dataset = utils.PrepareData(valid_img_dataset, valid_mask_dataset, "test",
+                                                                     args.target_size,
+                                                                     color_normalization=args.color)
+        print("validation image number:", valid_img_dataset.shape[0])
+        train_data_datagen = ImageDataGenerator()
+        valid_data_datagen = ImageDataGenerator()
+        print(train_img_dataset.shape)
+        train_input_generator = train_data_datagen.flow(train_img_dataset, train_mask_dataset,
+                                                            batch_size=args.batch_size)
+        valid_input_generator = valid_data_datagen.flow(valid_img_dataset, valid_mask_dataset,
+                                                            batch_size=args.batch_size)
 
-def test():
-    pass
+    elif load_mask:
+        print("Proc: Generating the image list...")
+        train_input_generator = train_data_datagen.flow_from_directory(
+                args.path_train + "/input",
+                seed=seed,
+                mask_directory=args.path_train + "/mask",
+                # color_mode="binary",
+                equalize_adaphist=False,
+                rescale_intensity=False,
+                set_random_clipping=True,
+                generate_HE=True,
+                generate_LAB=True,
+                max_image_number=0,
+                target_size=args.input_shape,
+                batch_size=args.batch_size,
+                class_mode='mask')
+
+        validation_input_generator = valid_data_datagen.flow_from_directory(
+                args.path_validation + "/input",
+                seed=seed,
+                mask_directory=args.path_validation + "/mask",
+                max_image_number=0,
+                equalize_adaphist=False,
+                rescale_intensity=False,
+                set_random_clipping=True,
+                generate_HE=True,
+                generate_LAB=True,
+                target_size=args.input_shape,
+                batch_size=args.batch_size,
+                class_mode='mask')
+    else:
+        print("Proc: Generating the image list...")
+        train_input_generator = train_data_datagen.flow_from_directory(
+            args.path_train,
+            seed=seed,
+            mask_directory=None,
+            equalize_adaphist=False,
+            rescale_intensity=False,
+            set_random_clipping=True,
+            generate_HE=True,
+            generate_LAB=True,
+            max_image_number=0,
+            target_size=args.input_shape,
+            batch_size=args.batch_size,
+            class_mode='sparse')
+
+        validation_input_generator = valid_data_datagen.flow_from_directory(
+            args.path_validation,
+            seed=seed,
+            mask_directory=None,
+            max_image_number=0,
+            equalize_adaphist=False,
+            rescale_intensity=False,
+            set_random_clipping=True,
+            generate_HE=True,
+            generate_LAB=True,
+            target_size=args.input_shape,
+            batch_size=args.batch_size,
+            class_mode='sparse')
+
+    print("Done: Image lists are created...")
+    # callbacks
+    print("Proc: Preprare the callbacks...")
+    log = callbacks.CSVLogger(args.save_dir + '/log.csv')
+    tb = callbacks.TensorBoard(log_dir=args.save_dir + '/tensorboard-logs',
+                                   batch_size=args.batch_size, histogram_freq=args.debug)
+    #lr_decay = callbacks.LearningRateScheduler(schedule=lambda epoch: args.lr * (0.9 ** epoch))
+    reduce_lr = keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=args.lr_factor,
+                                                      patience=args.change_lr_threshold, min_lr=args.min_lr, verbose=1)
+    history_register = keras.callbacks.History()
+
+    checkpoint = callbacks.ModelCheckpoint(args.save_dir + '/weights-{epoch:02d}.h5', monitor='val_loss',
+                                               save_best_only=True, save_weights_only=True, verbose=1,
+                                               multi_gpu_mode=multi_gpu, name_of_model="model_1")
+    print("Done: callbacks are created...")
+    class_weights = np.array([2.0, 1, 2.3])
+    # compile the modelg
+    # , self.precision, self.recall, "acc",
+    print("Proc: Compile the model...")
+    model.compile(optimizer=optimizers.Adam(lr=args.args.lr),
+                  loss=[loss_functions.margin_loss, "mse"],
+                  metrics={'ucnet': ['acc', metrics.precision, metrics.recall, metrics.dice_coef]},
+                  loss_weights=[1., args.lam_recon])
+
+    '''
+    model.compile(optimizer=optimizers.Adadelta(lr=args.args.lr),
+                      loss=[loss_functions.weighted_categorical_crossentropy(class_weights)],
+                      # ["categorical_crossentropy"],  # self.iou_loss
+                      # sample_weight_mode="temporal",
+                      metrics=['acc', metrics.precision,
+                               metrics.recall, metrics.jaccard_distance]
+                      )
+    '''
+    print("Done: the model was complied...")
+    print("Proc: Training the model...")
+    # Training with data augmentation
+    if Load_numpy:
+        train_steps_per_epoch = np.math.ceil(train_img_dataset.shape[0] / args.batch_size)
+        valid_steps_per_epoch = np.math.ceil(valid_img_dataset.shape[0] / args.batch_size)
+
+        model.fit_generator(
+            generator=utils.image_generator_flow(train_input_generator, reconstruction=False, reshape=True,
+                                                    generate_weight=False, run_one_vs_all_mode=False),
+            steps_per_epoch=train_steps_per_epoch,
+            epochs=args.epochs,
+            use_multiprocessing=True,
+            validation_steps=valid_steps_per_epoch,
+            validation_data=utils.image_generator_flow(valid_input_generator, reconstruction=False, reshape=True,
+                                                          generate_weight=False, run_one_vs_all_mode=False),
+            callbacks=[log, tb, checkpoint, reduce_lr])  # lr_decay
+
+    else:
+
+        train_steps_per_epoch = np.math.ceil((train_input_generator.samples) / args.batch_size)
+        valid_steps_per_epoch = np.math.ceil((validation_input_generator.samples) / args.batch_size)
+
+        model.fit_generator(
+            generator=utils.image_generator(train_input_generator, bool(args.use_cropping), args.input_shape,
+                                           cropping_size=args.cropping_size),
+            steps_per_epoch=train_steps_per_epoch,
+            epochs=args.epochs,
+            use_multiprocessing=True,
+            validation_steps=valid_steps_per_epoch,
+            validation_data=utils.image_generator(validation_input_generator, bool(args.use_cropping),
+                                                 args.input_shape, cropping_size=args.cropping_size),
+            callbacks=[log, tb, checkpoint, reduce_lr]) #lr_decay
+
+    # serialize weights to HDF5
+    model.save(args.save_dir + '/trained_model.h5')
+
+    # print("Saved model to disk")
+
+    # model.evaluate_generator
+    # from utils import plot_log
+    # plot_log(args.save_dir + '/log.csv', show=True)
+    print('-' * 30 + 'End: training ' + '-' * 30)
+
+    return model
+
+def Run(args, parallel=True):
+    if (parallel):
+        with tf_X.device('/cpu:0'):
+            # config = tf_X.ConfigProto()
+            # config.gpu_options.per_process_gpu_memory_fraction = 1
+            # config.gpu_options.allow_growth = True
+            # set_session(tf_X.Session(config=config))
+
+            model, eval_model = GeneExpressionLevel.UNetCapsuleNetClippedModel(n_class=args.nb_class,
+                                                                routing=args.routings,
+                                                                dim_capsule=args.dim_capsule,
+                                                                n_channels=args.n_channels
+                                                                )
+            # model = eval_model
+            model.summary()
+    else:
+
+        model, eval_model = GeneExpressionLevel.UNetCapsuleNetClippedModel(n_class=args.nb_class,
+                                                            routing=args.routings,
+                                                            dim_capsule=args.dim_capsule,
+                                                            n_channels=args.n_channels)
+
+    from keras.models import model_from_json, load_model
+    # ------------ save the template model rather than the gpu_mode ----------------
+    # serialize model to JSON
+    if args.load_model:
+        print(model.summary())
+        print("Proc: Loading the previous model...")
+        # load json and create model
+        loaded_model_json = None
+        with open(args.save_dir + '/trained_model.json', "r") as json_file:
+            loaded_model_json = json_file.read()
+        model = model_from_json(loaded_model_json)
+
+        # loaded_model_json = None
+        # with open(self.args.save_dir+'/eval_model.json', 'r') as json_file:
+        #    loaded_model_json = json_file.read()
+        # eval_model = model_from_json(loaded_model_json)
+    # Load the weight is available...
+    if args.weights is None and args.load_previous_weight:
+        file_name_weight = utils.GetLastWeight(args.save_dir)
+    else:
+        file_name_weight = args.weights
+
+    if file_name_weight is not None:
+        model.load_weights(file_name_weight)
+    else:
+        print('No weights are provided. Will test using random initialized weights.')
+
+    # Show the model
+    # Testing..
+    if not args.testing:
+        plot_model(model, to_file= args.save_dir + '/model.png', show_shapes=True)
+
+        if (parallel):
+            from keras.utils import multi_gpu_model
+            print("Parallel:")
+            multi_model = multi_gpu_model(model, gpus=args.gpu)
+            plot_model(multi_model, to_file=args.save_dir + '/model_parallel.png', show_shapes=True)
+
+            multi_model.summary()
+            model = train(model=multi_model, multi_gpu=parallel, load_augmented_data=args.load_augmented_data)
+        else:
+            model = train(model=model, multi_gpu=parallel, load_augmented_data=args.load_augmented_data)
+
+        file_name_weight = utils.GetLastWeight(args.save_dir)
+        # eval_model = model
+        if file_name_weight is not None:
+            print("Loading the weight...")
+            eval_model.load_weights(file_name_weight, by_name=True)
+        test(model=eval_model, Onlive=True,
+                  image_source="/home/eminaga/EncryptedData/Challenge/MoNuSeg Training Data/Tissue images/")
+    else:
+        if file_name_weight is not None:
+            print("Loading the weight...")
+            eval_model.load_weights(file_name_weight, by_name=True)
+        if os.path.exists('./scaler.pkl'):
+            scaler = joblib.load('./scaler.pkl')
+            print("Loaded existing scale transformeer...")
+        eval_model.summary()
+        test(model=eval_model, Onlive=True,
+                  image_source=args.filename)
+
+def test(model,Onlive, image_source, args):
+    if Onlive:
+        from os.path import isfile, join
+        from os import listdir
+        import analyseimage
+        print("Proc: Onlive test....")
+        print(image_source)
+
+        # img_files = [f for f in listdir(Flags.source_images) if isfile(join(Flags.source_images, f)) and os.path.splitext(f)[1]==".tif"]
+        list_of_image_files = [f for f in listdir(image_source) if
+                               isfile(join(image_source, f)) and os.path.splitext(f)[1] == ".tif"]
+        # self.GenerateFileListFromDirectory(image_source, supported_image_extension)
+        print(list_of_image_files)
+        id_ = 0
+        for file_img in list_of_image_files:
+            filname_img = os.path.join(image_source, file_img)
+            id_ += 1
+            print(id_)
+            filname = os.path.basename(file_img)
+            if args.use_cropping:
+                target_size = args.cropping_size
+            else:
+                target_size = args.input_shape
+
+            analyseimage.PredictImage(model, filname_img, id_, "./" + filname + "_heatmap.png", 40,
+                              normalization_color = args.color, target_size=target_size, nb_class=args.nb_class, batch_size=args.batch_size )
+        return print("Done")
+    #TODO: Provide another solution
 
 def ___main___():
     import os
@@ -26,7 +323,7 @@ def ___main___():
     parser.add_argument('--preload_size', default=1600, type=int)
     parser.add_argument('--lr', default=0.1, type=float,
                         help="Initial learning rate")
-    parser.add_argument('--nclass', '-n', default=3, type=int, help="the number of the classes")
+    parser.add_argument('--nb_class', '-n', default=3, type=int, help="the number of the classes")
     parser.add_argument('--path_validation', default="/home/eminaga/Challenges/nucleus/valid",
                         help="images for validation")
     parser.add_argument('--path_train', default="/home/eminaga/Challenges/nucleus/wtrain",
@@ -63,7 +360,7 @@ def ___main___():
     parser.add_argument('--dim_capsule', default=16, type=int,
                         help="dim of capsule")
     parser.add_argument('-w', '--weights', default=None,
-                        help="argparseThe path of the saved weights. Should be specified when testing")
+                        help="The path of the saved weights. Should be specified when testing")
 
     parser.add_argument('-gp', '--generate_patch', default=False, action='store_true',
                         help='generate patches')
@@ -71,23 +368,22 @@ def ___main___():
     parser.add_argument('s', '-source', default='')
     parser.add_argument('d', '-destination', default='')
 
+    parser.add_argument('--input_shape', default=(512,512), action='store_true', help="Define the input shape of the image")
+    parser.add_argument('--cropping_size', default=(64, 64), action='store_true', help="Define the cropping size")
+    parser.add_argument('--filename', default="", help="Define the filename for the test")
+    parser.add_argument('--change_lr_threshold', default=5, type=int, help="When to change the learning rate. The epoche number is given.")
+    #change_lr_threshold
     args = parser.parse_args()
 
     print(args)
 
     if args.generate_patch:
         GeneratePatchImages(args)
-    if not os.path.exists(args.save_dir):
-        os.makedirs(args.save_dir)
+    else:
+        Run(args, parallel=args.parallel)
+        if not os.path.exists(args.save_dir):
+            os.makedirs(args.save_dir)
 
-        model_core = model.GeneExpressionLevel(directory_image=,
-                                  directory_mask=,
-                                  input_shape=,
-                                  result_directory=,
-                                  batch_size=,
-                                  epoch=,
-                                  presizeloading=)
-        model_core.Run()
 
 
 

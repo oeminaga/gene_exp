@@ -40,6 +40,52 @@ def Conv2DBNSLU(x, filters, kernel_size=1, strides=1, padding='same', activation
     x = layers.Activation(activation)(x)
     return x
 
+def GetLastWeight(directory, prefix="weights", ends=".h5"):
+    files = [os.path.splitext(os.path.basename(i))[0] for i in os.listdir(directory) if os.path.isfile(os.path.join(directory,i)) and prefix in i and i.endswith(ends)]
+    if (len(files)==0):
+        return None
+    best_epoch = 1
+    weight_epochs = []
+    for fil in files:
+        weight_epochs.append(int(fil.split("-")[1]))
+    best_epoch = max(weight_epochs)
+    print(best_epoch)
+    #Construct the file name
+    file_name_weight = directory + '/weights-%02d.h5' % (best_epoch)
+    return file_name_weight
+
+def CropLayers(input_shape=(64, 64, 3), cropping_size=(64, 64), off_set=(0, 0)):
+    seq_seq_left_right_top_bottom_itms = []
+    for x in range(0, input_shape[0], cropping_size[0]):
+        for y in range(0, input_shape[1], cropping_size[1]):
+            seq_top_bottom = (off_set[0] + x, (off_set[0] + x + cropping_size[0]))
+            seq_left_right = (off_set[1] + y, (off_set[1] + y + cropping_size[1]))
+            if seq_top_bottom[1] > input_shape[0]:
+                diff = seq_top_bottom[1] - input_shape[0]
+                seq_top_bottom = (seq_top_bottom[0] - diff, input_shape[0])
+            if seq_left_right[1] > input_shape[1]:
+                diff = seq_left_right[1] - input_shape[1]
+                seq_left_right = (seq_left_right[0] - diff, input_shape[1])
+
+            cropped_slide = (seq_top_bottom[0], seq_top_bottom[1], seq_left_right[0], seq_left_right[1])
+            seq_seq_left_right_top_bottom_itms.append(cropped_slide)
+    return seq_seq_left_right_top_bottom_itms
+
+def get_number_to_cut(cropping_size, input_shape):
+    coordinations = ((0, 0),
+                    (int(round(cropping_size[0] / 2.)), 0),
+                    (0, int(round(cropping_size[1] / 2.))),
+                    (int(round(cropping_size[0] / 2.)), int(round(cropping_size[1] / 2.))),
+                    (int(round(cropping_size[0] / 4.)), 0),
+                    (0, int(round(cropping_size[1] / 4.))),
+                    (int(round(cropping_size[0] / 4.)), int(round(cropping_size[1] / 4.))))
+    # Generate image patches with different off set
+    counter = 0
+    for coord in coordinations:
+        itm_list_coordination = CropLayers(input_shape=input_shape, cropping_size=cropping_size, off_set=coord)
+        counter = counter + len(itm_list_coordination)
+    return counter
+
 def make_folders(file_prefix, file_address):
     if not file_prefix.startswith("/"):
         file_prefix = "./" + file_prefix
@@ -211,7 +257,6 @@ def combine_images(generated_images, height=None, width=None):
 def random_scale_img(img, mask, xy_range, lock_xy=False):
     if random.random() > xy_range.chance:
         return img, mask
-
 
     if not isinstance(img, mask, list):
         img = [img]
