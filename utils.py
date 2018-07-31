@@ -618,9 +618,10 @@ class OpenSlideOnlivePatch:
         self.mask_folder = mask_folder
         self.annotation_zooming_level = annotation_zooming_level
         self.clipped = clipped
+        self.target_zooming = target_zooming
         self.factor_for_mask = self.target_zooming / self.annotation_zooming_level
         self.factor = self.target_zooming / self.zooming_level
-        self.target_zooming = target_zooming
+
 
     def GetTheMaxSizeOfRectangleOfEachPolygons(self, polygons):
         RectMaxOfEachPolygons = []
@@ -654,7 +655,7 @@ class OpenSlideOnlivePatch:
         :param filename: Give a filename of supported images.
         :return:
         '''
-        print(filename)
+        print("Proce: Loading the file ",filename)
         try:
             self.image = OpenSlide(filename)
             # temp = str(image.properties)[14:-1].replace("u'", "\"")
@@ -672,8 +673,8 @@ class OpenSlideOnlivePatch:
         polygons = self.ExtractPolygons(ET.parse(filename).getroot(), return_identity_list=return_identity_list, LoadAll=LoadAll, select_criteria=self.select_criteria)
         return polygons
 
-    def _GettissueArea(self,level=3):
-        image = self.image.read_region((0, 0), level, self.img.level_dimensions[level])
+    def old_GettissueArea(self,level=3):
+        image = self.image.read_region((0, 0), level, self.image.level_dimensions[level])
         image = np.asarray(image)
         image = image[:, :, 0:3]
         HE = color.rgb2hed(image)
@@ -684,29 +685,58 @@ class OpenSlideOnlivePatch:
         tissues = morphology.opening(tissues, square(10))
         return tissues
 
-    def LoadTissueMask(self):
-        level_3 = self._GettissueArea(3)
-        level_2 = self._GettissueArea(2)
+    def _GettissueArea(self, level=3):
+        image = self.image.read_region((0, 0), level, self.image.level_dimensions[level])
+        image = np.asarray(image)
+        image = image[:, :, 0:3]
+        image = skimage.color.rgb2grey(image)
+        from skimage.filters import threshold_minimum
+        image = filters.gaussian(image, 3)
+        thresh_min = threshold_minimum(image)
+        binary_min = image <= thresh_min
+        tissues = binary_min
+        tissues = morphology.closing(tissues, square(4))
+        tissues = morphology.opening(tissues, square(4))
+        #cv2.imwrite("./tissue.png", tissues * 255.)
+        return tissues
 
-        shape_To_convert = (self.image.level_dimensions[2][1], self.image.level_dimensions[2][0])
-        level_3_u = skimage.transform.resize(level_3, shape_To_convert)
-        level = level_3_u * level_2
+
+    def MaxRegion(self, regions):
+        rx = None
+        for region in regions:
+            if rx is None:
+                rx = region
+            elif rx.area < region.area:
+                rx = region
+        return rx
+
+    def LoadTissueMask(self):
+        print("Proc: Determine tissue area...")
+        level_3 = self._GettissueArea(3)
+
+        level = level_3
         cleared = clear_border(level)
         label_image = label(cleared)
         regions = regionprops(label_image)
+        level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[3])
+        region = self.MaxRegion(regions)
 
-        level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[2])
-        minr, minc, maxr, maxc = regions[0].bbox
+        minr, minc, maxr, maxc = region.bbox
         minr_new = minr * level_factor
         minc_new = minc * level_factor
 
         maxr_new = maxr * level_factor
         maxc_new = maxc * level_factor
 
-        rect = (np.around((minr_new[1], minc_new[0], maxr_new[1] - minr_new[1], maxc_new[0] - minc_new[0]),
-                          decimals=0)).astype(np.int)
 
-        level_0 = skimage.transform.resize(regions[0].filled_image, shape_To_convert)
+        rect = (np.around((minr_new[1], minc_new[0], maxr_new[1] - minr_new[1], maxc_new[0] - minc_new[0]),
+                         decimals=0)).astype(np.int)
+
+        shape_To_convert = (rect[2], rect[3])
+        print(shape_To_convert)
+        level_0 = skimage.transform.resize(region.filled_image, shape_To_convert)
+        #cv2.imwrite("./test.png", level_0*255.)
+        print("Done: Determine tissue area...")
         return level_0,  rect
 
     def GetLesionIdentity(self, xml_root, AttributeParameter="Description", AttributeValue="LCM"):
@@ -839,9 +869,12 @@ class OpenSlideOnlivePatch:
         :param patch_size: Define the patch dimension
         :return: A list of X,Y coordinations randomly defined.
         '''
+        print("Proc: Random region definition")
         dimension = mask.shape
         reg_lst = []
         counter = 0
+        plt.imshow(mask)
+        plt.show()
         total_size = patch_size[0] * patch_size[1]
         while counter < max_patch_number:
             x = random.randint(0, dimension[0] - patch_size[0])
@@ -849,10 +882,11 @@ class OpenSlideOnlivePatch:
             mask_selected = mask[y:y + patch_size[1], x:x + patch_size[0]]
             number_positive = np.count_nonzero(mask_selected)
             percentage_positive = number_positive / total_size
-            if percentage_positive > 0.99:
+            if percentage_positive > 0.90:
                 reg_lst.append([x, y])
                 counter = counter + 1
 
+        print("Done: Random region definition")
         return reg_lst
 
     def GetPatches(self, image, mask, batch_size, patch_size):
@@ -871,20 +905,24 @@ class OpenSlideOnlivePatch:
             patch_imgs[index] = image[y:y + patch_size[1], x:x + patch_size[0]].copy()
         return patch_imgs
 
-    def GetPatchesAsFiles(self, image,mask, patch_per_image, patch_size, filename, type_data="train", n_class=""):
+    def GetPatchesAsFiles(self,mask, patch_per_image, patch_size, filename, type_data="train", n_class=""):
         regions = self.RandomRegionDefinition(mask, patch_per_image, patch_size)
+        print("Proc: Generate patch images....")
         file_ex = os.path.basename(filename)
         file_to_use = os.path.splitext(file_ex)[0]
 
-        x_file_path = self.image_folder + "/" + type_data + "/"+ n_class + "/"
+        x_file_path = self.image_folder + "/" + type_data + "/"+ str(n_class) + "/"
         counter = 0
         str_input_path = "/%s/%s/" % (type_data, n_class)
         make_folders(self.image_folder, str_input_path)
         for index, region in enumerate(regions):
             x, y = region
             x_file_path = x_file_path + "%s_%s.png" %(file_to_use, counter)
-            img = image[y:y + patch_size[1], x:x + patch_size[0]].copy()
-            cv2.imwrite(x_file_path, img)
+            counter += 1
+            img = self.image.read_region((x,y),0,patch_size)#image[y:y + patch_size[1], x:x + patch_size[0]].copy()
+            img.save(x_file_path)
+            #cv2.imwrite(x_file_path, img)
+        print("Done: Patch images")
 
 
     # Begin: Major functions (Also an example use for other functions listed above)
@@ -996,8 +1034,12 @@ class OpenSlideOnlivePatch:
     def GeneratePatchDirectAsImagePatch(self, filename, patch_size=(512,512), batch_size=100, type_data="", n_class=""):
         self.LoadImage(filename)
         level_0, region_def = self.LoadTissueMask()
-        image = self.image.read_region((region_def[1], region_def[0]), level=0, size=(region_def[3], region_def[2]))
-        self.GetPatchesAsFiles(image, level_0, batch_size, patch_size, filename, type_data, n_class)
+        print(region_def)
+
+        #image = self.image.read_region((region_def[1], region_def[0]), level=0, size=(region_def[3], region_def[2]))
+        #image = np.array(image)
+        #GetPatchesAsFiles
+        self.GetPatchesAsFiles(level_0, batch_size, patch_size, filename, type_data, n_class)
     # End Major functions
 
 class Filedirectoryamagement():
@@ -1031,13 +1073,16 @@ class Filedirectoryamagement():
 
     def GenerateFileListFromDirectory(self, directories, extension):
         list_of_files = {}
-        for dir_c in directories:
-            if (os.path.exists(dir_c)):
-                for (dirpath, dirnames, filenames) in os.walk(dir_c):
-                    for filename in filenames:
-                        # print(extension)
-                        if filename.endswith(tuple(extension)):
-                            list_of_files[filename] = os.sep.join([dirpath, filename])
+        print(directories)
+        #for dir_c in directories:
+        #print(dir_c)
+        if (os.path.exists(directories)):
+            for (dirpath, dirnames, filenames) in os.walk(directories):
+                for filename in filenames:
+                    # print(extension)
+                    if filename.endswith(tuple(extension)):
+                        print(filename)
+                        list_of_files[filename] = os.sep.join([dirpath, filename])
         return list_of_files
 
     def LoadFiles(self, Mask=True):
@@ -1047,7 +1092,14 @@ class Filedirectoryamagement():
             self.files = self.FindMatchedImagesAndAnnotation(img_files, mask_files)
         else:
             self.files = img_files
-            self.files = random.shuffle(self.files)
+        files_keys =list(self.files.keys())
+        random.shuffle(files_keys)
+
+        file_shuffle = {}
+        for key in files_keys:
+            file_shuffle[key] = self.files[key]
+        self.files = file_shuffle
+        print(self.files)
 
     def GenerateKFoldValidation(self, k=5):
         from sklearn.model_selection import KFold
@@ -1065,18 +1117,26 @@ class Filedirectoryamagement():
                 return fln
         return None
 
-    def generate_patch_images_train_valid_test(self, patch_per_image=100 , image_patch_size=(512,512), subset_ratio=[0.6,0.8,0.2], directory="", class_filename="", type_class_col="sample_type"):
-        train_length = int(round(len(self.files[0]) * subset_ratio[0]))
-        remaining = len(self.files[0]) - train_length
+    def generate_patch_images_train_valid_test(self, patch_per_image=100, image_patch_size=(512,512), subset_ratio=[0.6,0.5,0.5], directory="", class_filename="", type_class_col="sample_type"):
+        print("Generate file list...")
+        self.LoadFiles(Mask=False)
+        print("The following images were found: ")
+        print(self.files)
+        train_length = int(round(len(self.files.keys()) * subset_ratio[0]))
+        print("train set, n:", train_length)
+        remaining = len(self.files.keys()) - train_length
         test_length = int(round(remaining * subset_ratio[1]))
+        print("test set, n:", test_length)
         valid_length = remaining - test_length
+        print("valid set, n:", valid_length)
 
         import pandas as pd
+        print("Loading the classification file...")
         data = pd.read_csv(class_filename, index_col=0)
 
-        train_files = random.sample(self.files[0], train_length)
-        remaining = [e for e in self.files[0] if e not in train_files]
-        test_files = random.sample(remaining, test_length)
+        train_files = random.sample(list(self.files.values()), train_length)
+        remaining = [e for e in list(self.files.values()) if e not in train_files]
+        test_files = random.sample(list(remaining), test_length)
         valid_files = [e for e in remaining if e not in test_files]
 
         files_subsection = {'train':train_files, 'test': test_files, 'valid': valid_files}
@@ -1085,13 +1145,16 @@ class Filedirectoryamagement():
         list_of_unique_value = pd.Series(data.CNV_Status, name='CNV_Status').unique()
         print("subclasses are ",list_of_unique_value)
         for type_data in files_subsection.keys():
+            print("Starting with: ", type_data)
             filelist = files_subsection[type_data]
+            print("Files:")
+            print(filelist)
             for filename in filelist:
                 str_file = os.path.basename(filename)
                 str_file = os.path.splitext(str_file)[0]
                 sample_id = str_file[0:15]
+                sample_id = sample_id.replace("-", ".")
                 class_type = data.loc[sample_id, type_class_col]
-
                 bdx.GeneratePatchDirectAsImagePatch(filename, image_patch_size, patch_per_image, type_data, class_type)
 
     def image_generator_flow(self, generator, reconstruction=True, verbose=False, classify=False, spare_category=False,

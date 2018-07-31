@@ -16,10 +16,11 @@ import os
 import loss_functions
 import keras.backend as K
 
+
 def GeneratePatchImages(args):
     print("Proc: Running the patch images")
-    file_manager = utils.Filedirectoryamagement(None, image_directories=arg.source)
-    file_manager.generate_patch_images_train_valid_test(patch_per_image=100, image_patch_size=(512,512), directory=arg.destination, class_filename="sample_cnv.csv", type_class_col="CNV_Status")
+    file_manager = utils.Filedirectoryamagement(mask_directories=None, image_directories=args.source)
+    file_manager.generate_patch_images_train_valid_test(patch_per_image=100, image_patch_size=(512,512), directory=args.destination, class_filename="sample_cnv.csv", type_class_col="CNV_Status")
     print("Done: Patch processing...")
 
 def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=False, load_mask=False):
@@ -311,7 +312,8 @@ def test(model,Onlive, image_source, args):
         return print("Done")
     #TODO: Provide another solution
 
-def ___main___():
+if __name__ == "__main__":
+    print("Starting...")
     import os
     import argparse
     from keras.preprocessing.image import ImageDataGenerator
@@ -362,11 +364,11 @@ def ___main___():
     parser.add_argument('-w', '--weights', default=None,
                         help="The path of the saved weights. Should be specified when testing")
 
-    parser.add_argument('-gp', '--generate_patch', default=False, action='store_true',
+    parser.add_argument('-gp', '--generate_patch', default=True, action='store_true',
                         help='generate patches')
 
-    parser.add_argument('s', '-source', default='')
-    parser.add_argument('d', '-destination', default='')
+    parser.add_argument('-s', '--source', default="/Volumes/ExternalHD/Histology")
+    parser.add_argument('-d', '--destination', default="/Volumes/ExternalHD/Images")
 
     parser.add_argument('--input_shape', default=(512,512), action='store_true', help="Define the input shape of the image")
     parser.add_argument('--cropping_size', default=(64, 64), action='store_true', help="Define the cropping size")
@@ -378,6 +380,7 @@ def ___main___():
     print(args)
 
     if args.generate_patch:
+
         GeneratePatchImages(args)
     else:
         Run(args, parallel=args.parallel)
