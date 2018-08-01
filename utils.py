@@ -1134,28 +1134,64 @@ class Filedirectoryamagement():
         print("Loading the classification file...")
         data = pd.read_csv(class_filename, index_col=0)
 
+        list_of_unique_value = pd.Series(data.CNV_Status, name=type_class_col).unique()
+
+        files_groups = {}
+        for x in list_of_unique_value:
+            files_groups[x] = data.loc[data[type_class_col] == x, type_class_col]
+
+        train_files = []
+        test_files = []
+        valid_files = []
+        for group in files_groups.keys():
+            sample_list = files_groups[group]
+            train_length = int(round(len(files_groups[group]) * 0.7))
+            remaining = len(files_groups[group]) - train_length
+
+            test_length = int(round(remaining * 0.5))
+            valid_length = remaining - test_length
+
+            train_files.extend(random.sample(list(sample_list.index), train_length))
+            remaining = [e for e in list(sample_list.index) if e not in train_files]
+            test_files.extend(random.sample(list(remaining), test_length))
+            valid_files.extend([e for e in remaining if e not in test_files])
+
+        print("number of samples for train set" , len(train_files))
+        print("number of samples for test set", len(test_files))
+        print("number of samples for validation set", len(valid_files))
+
+
+        '''
         train_files = random.sample(list(self.files.values()), train_length)
         remaining = [e for e in list(self.files.values()) if e not in train_files]
         test_files = random.sample(list(remaining), test_length)
         valid_files = [e for e in remaining if e not in test_files]
+        '''
 
         files_subsection = {'train':train_files, 'test': test_files, 'valid': valid_files}
         bdx = OpenSlideOnlivePatch(image_folder=directory)
         #Determine the subclass to generate the directories.
-        list_of_unique_value = pd.Series(data.CNV_Status, name='CNV_Status').unique()
+
         print("subclasses are ",list_of_unique_value)
+        files_indexed = {}
+        for file in self.files.values():
+            str_file = os.path.splitext(file)[0]
+            sample_id = str_file[0:15]
+            sample_id = sample_id.replace("-", ".")
+            files_indexed[sample_id] = file
+
         for type_data in files_subsection.keys():
             print("Starting with: ", type_data)
             filelist = files_subsection[type_data]
-            print("Files:")
+            print("Selected samples:")
             print(filelist)
-            for filename in filelist:
-                str_file = os.path.basename(filename)
-                str_file = os.path.splitext(str_file)[0]
-                sample_id = str_file[0:15]
-                sample_id = sample_id.replace("-", ".")
-                class_type = data.loc[sample_id, type_class_col]
-                bdx.GeneratePatchDirectAsImagePatch(filename, image_patch_size, patch_per_image, type_data, class_type)
+            for sample_id in filelist:
+                if (sample_id in files_indexed):
+                    filename = files_indexed[sample_id]
+                    class_type = data.loc[sample_id, type_class_col]
+                    bdx.GeneratePatchDirectAsImagePatch(filename, image_patch_size, patch_per_image, type_data, class_type)
+                else:
+                    print("No file was found for ", sample_id)
 
     def image_generator_flow(self, generator, reconstruction=True, verbose=False, classify=False, spare_category=False,
                              generate_weight=False, reshape=False, run_one_vs_all_mode=False, weights=None):
