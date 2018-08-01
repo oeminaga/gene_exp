@@ -367,8 +367,8 @@ if __name__ == "__main__":
     parser.add_argument('-gp', '--generate_patch', default=True, action='store_true',
                         help='generate patches')
 
-    parser.add_argument('-s', '--source', default="/home/eminaga/HE/")
-    parser.add_argument('-d', '--destination', default="/home/eminaga/Histogenomics/")
+    parser.add_argument('-s', '--source', default="/home/eminaga/HE")
+    parser.add_argument('-d', '--destination', default="/home/eminaga/Histogenomics")
 
     parser.add_argument('--input_shape', default=(512,512), action='store_true', help="Define the input shape of the image")
     parser.add_argument('--cropping_size', default=(64, 64), action='store_true', help="Define the cropping size")

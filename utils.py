@@ -1120,15 +1120,15 @@ class Filedirectoryamagement():
     def generate_patch_images_train_valid_test(self, patch_per_image=100, image_patch_size=(512,512), subset_ratio=[0.6,0.5,0.5], directory="", class_filename="", type_class_col="sample_type"):
         print("Generate file list...")
         self.LoadFiles(Mask=False)
-        print("The following images were found: ")
-        print(self.files)
-        train_length = int(round(len(self.files.keys()) * subset_ratio[0]))
-        print("train set, n:", train_length)
-        remaining = len(self.files.keys()) - train_length
-        test_length = int(round(remaining * subset_ratio[1]))
-        print("test set, n:", test_length)
-        valid_length = remaining - test_length
-        print("valid set, n:", valid_length)
+        #print("The following images were found: ")
+        #print(self.files)
+        #train_length = int(round(len(self.files.keys()) * subset_ratio[0]))
+        #print("train set, n:", train_length)
+        #remaining = len(self.files.keys()) - train_length
+        #test_length = int(round(remaining * subset_ratio[1]))
+        #print("test set, n:", test_length)
+        #valid_length = remaining - test_length
+        #print("valid set, n:", valid_length)
 
         import pandas as pd
         print("Loading the classification file...")
