@@ -917,10 +917,10 @@ class OpenSlideOnlivePatch:
         make_folders(self.image_folder, str_input_path)
         for index, region in enumerate(regions):
             x, y = region
-            x_file_path = x_file_path + "%s_%s.png" %(file_to_use, counter)
+            tmp_x_file_path = x_file_path + "%s_%s.png" %(file_to_use, counter)
             counter += 1
             img = self.image.read_region((x,y),0,patch_size)#image[y:y + patch_size[1], x:x + patch_size[0]].copy()
-            img.save(x_file_path)
+            img.save(tmp_x_file_path)
             #cv2.imwrite(x_file_path, img)
         print("Done: Patch images")
 
@@ -1142,8 +1142,7 @@ class Filedirectoryamagement():
             files_indexed[sample_id] = self.files[file]
 
         #Remove rows not having the image file
-        data = data.loc[sample_id,:]
-        #print(data)
+        data = data.loc[files_indexed.keys(),:]
 
         #Get the classes
         list_of_unique_value = pd.Series(data.CNV_Status, name=type_class_col).unique()
