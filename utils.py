@@ -1135,11 +1135,11 @@ class Filedirectoryamagement():
         data = pd.read_csv(class_filename, index_col=0)
 
         files_indexed = {}
-        for file in self.files.values():
+        for file in self.files.keys():
             str_file = os.path.splitext(file)[0]
             sample_id = str_file[0:15]
             sample_id = sample_id.replace("-", ".")
-            files_indexed[sample_id] = file
+            files_indexed[sample_id] = self.files[file]
 
         #Remove rows not having the image file
         for sample_id in files_indexed.keys():
