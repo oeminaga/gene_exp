@@ -690,13 +690,13 @@ class OpenSlideOnlivePatch:
         image = np.asarray(image)
         image = image[:, :, 0:3]
         image = skimage.color.rgb2grey(image)
-        from skimage.filters import threshold_minimum
-        image = filters.gaussian(image, 3)
-        thresh_min = threshold_minimum(image)
+        from skimage.filters import threshold_minimum, threshold_otsu
+        image = filters.gaussian(image, 2)
+        thresh_min = threshold_otsu(image)
         binary_min = image <= thresh_min
         tissues = binary_min
-        tissues = morphology.closing(tissues, square(4))
-        tissues = morphology.opening(tissues, square(4))
+        tissues = morphology.closing(tissues, square(2))
+        tissues = morphology.opening(tissues, square(2))
         #cv2.imwrite("./tissue.png", tissues * 255.)
         return tissues
 
