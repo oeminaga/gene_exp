@@ -1134,6 +1134,19 @@ class Filedirectoryamagement():
         print("Loading the classification file...")
         data = pd.read_csv(class_filename, index_col=0)
 
+        files_indexed = {}
+        for file in self.files.values():
+            str_file = os.path.splitext(file)[0]
+            sample_id = str_file[0:15]
+            sample_id = sample_id.replace("-", ".")
+            files_indexed[sample_id] = file
+
+        #Remove rows not having the image file
+        for sample_id in files_indexed.keys():
+            if sample_id not in list(data.index):
+                data.drop([sample_id])
+
+        #Get the classes
         list_of_unique_value = pd.Series(data.CNV_Status, name=type_class_col).unique()
 
         files_groups = {}
@@ -1173,12 +1186,7 @@ class Filedirectoryamagement():
         #Determine the subclass to generate the directories.
 
         print("subclasses are ",list_of_unique_value)
-        files_indexed = {}
-        for file in self.files.values():
-            str_file = os.path.splitext(file)[0]
-            sample_id = str_file[0:15]
-            sample_id = sample_id.replace("-", ".")
-            files_indexed[sample_id] = file
+
 
         for type_data in files_subsection.keys():
             print("Starting with: ", type_data)
