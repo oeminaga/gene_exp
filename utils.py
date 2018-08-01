@@ -873,8 +873,8 @@ class OpenSlideOnlivePatch:
         dimension = mask.shape
         reg_lst = []
         counter = 0
-        plt.imshow(mask)
-        plt.show()
+        #plt.imshow(mask)
+        #plt.show()
         total_size = patch_size[0] * patch_size[1]
         while counter < max_patch_number:
             x = random.randint(0, dimension[0] - patch_size[0])
@@ -1142,9 +1142,7 @@ class Filedirectoryamagement():
             files_indexed[sample_id] = self.files[file]
 
         #Remove rows not having the image file
-        for sample_id in files_indexed.keys():
-            if sample_id not in list(data.index):
-                data.drop([sample_id])
+        data = data.loc[sample_id,]
 
         #Get the classes
         list_of_unique_value = pd.Series(data.CNV_Status, name=type_class_col).unique()
