@@ -726,7 +726,8 @@ class OpenSlideOnlivePatch:
         plt.imshow(level_3)
         plt.show()
         region = self.MaxRegion(regions)
-
+        plt.imshow(region)
+        plt.show()
         minr, minc, maxr, maxc = region.bbox
         minr_new = minr * level_factor
         minc_new = minc * level_factor
