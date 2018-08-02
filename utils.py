@@ -736,6 +736,7 @@ class OpenSlideOnlivePatch:
 
         shape_To_convert = (rect[2], rect[3])
         print(shape_To_convert)
+
         level_0 = skimage.transform.resize(region.image, shape_To_convert)
         #cv2.imwrite("./test.png", level_0*255.)
         print("Done: Determine tissue area...")
@@ -931,7 +932,7 @@ class OpenSlideOnlivePatch:
         print("Proc: Generate patch images....")
         file_ex = os.path.basename(filename)
         file_to_use = os.path.splitext(file_ex)[0]
-
+        n_class = int(round(n_class,0))
         x_file_path = self.image_folder + "/" + type_data + "/"+ str(n_class) + "/"
         counter = 0
         str_input_path = "/%s/%s/" % (type_data, n_class)
@@ -1153,6 +1154,7 @@ class Filedirectoryamagement():
 
         #Get the classes
         list_of_unique_value = pd.Series(data.CNV_Status, name=type_class_col).unique()
+
 
         files_groups = {}
         for x in list_of_unique_value:
