@@ -711,6 +711,10 @@ class OpenSlideOnlivePatch:
         return rx
 
     def LoadTissueMask(self):
+        '''
+        Determine the tissue surface.
+        :return: mask, rectangle (Y,X, Height, Width) = (row, columne, rows depth, columne depth)
+        '''
         print("Proc: Determine tissue area...")
         level_3 = self._GettissueArea(3)
 
@@ -862,7 +866,7 @@ class OpenSlideOnlivePatch:
         else:
             return polys
 
-    def RandomRegionDefinition(self, mask, max_patch_number, patch_size):
+    def RandomRegionDefinition(self, mask, offset_coordination, max_patch_number, patch_size):
         '''
         :param mask: mask image
         :param max_patch_number: Define the batch size
@@ -876,15 +880,17 @@ class OpenSlideOnlivePatch:
         #plt.imshow(mask)
         #plt.show()
         total_size = patch_size[0] * patch_size[1]
+        tolerance = 500
         while counter < max_patch_number:
-            x = random.randint(0, dimension[0] - patch_size[0])
-            y = random.randint(0, dimension[1] - patch_size[0])
-            mask_selected = mask[y:y + patch_size[1], x:x + patch_size[0]]
+            x = random.randint(0,  dimension[1] - patch_size[0])
+            y = random.randint(0, dimension[0] - patch_size[1])
+            mask_selected = mask[y:y + patch_size[1], x:x+ patch_size[0]]
             number_positive = np.count_nonzero(mask_selected)
 
             percentage_positive = number_positive / total_size
             if percentage_positive > 0.90:
-                from skimage.filters import threshold_otsu
+                x = x + offset_coordination[1]
+                y = y + offset_coordination[0]
                 img = self.image.read_region((x,y),0,patch_size)
                 image = np.asarray(img)
                 image = image[:, :, 0:3]
@@ -895,10 +901,14 @@ class OpenSlideOnlivePatch:
                 if percentage_positive > 0.70:
                     reg_lst.append([x, y])
                     counter = counter + 1
+                if counter >= tolerance:
+                    print("Stopped after 500 tries...")
+                    break
+
         print("Done: Random region definition")
         return reg_lst
 
-    def GetPatches(self, image, mask, batch_size, patch_size):
+    def GetPatches(self, image, mask, batch_size, patch_size, coordination):
         '''
         :param image: the original image
         :param mask:  the mask (2-Dimension boolean)
@@ -906,7 +916,7 @@ class OpenSlideOnlivePatch:
         :param patch_size: the dimension of the patch (512, 512)
         :return: patched images in numpy array (batch_size, height, width, channels.
         '''
-        regions = self.RandomRegionDefinition(mask, batch_size, patch_size)
+        regions = self.RandomRegionDefinition(mask, coordination, batch_size, patch_size)
         patch_imgs = np.zeros((batch_size, patch_size[0], patch_size[1], image.shape[2]), dtype=np.uint8)
 
         for index, region in enumerate(regions):
@@ -914,8 +924,8 @@ class OpenSlideOnlivePatch:
             patch_imgs[index] = image[y:y + patch_size[1], x:x + patch_size[0]].copy()
         return patch_imgs
 
-    def GetPatchesAsFiles(self,mask, patch_per_image, patch_size, filename, type_data="train", n_class=""):
-        regions = self.RandomRegionDefinition(mask, patch_per_image, patch_size)
+    def GetPatchesAsFiles(self,mask, patch_per_image, patch_size, filename, type_data="train", n_class="", coordination=(0,0,0,0)):
+        regions = self.RandomRegionDefinition(mask, coordination, patch_per_image, patch_size)
         print("Proc: Generate patch images....")
         file_ex = os.path.basename(filename)
         file_to_use = os.path.splitext(file_ex)[0]
@@ -928,9 +938,8 @@ class OpenSlideOnlivePatch:
             x, y = region
             tmp_x_file_path = x_file_path + "%s_%s.png" %(file_to_use, counter)
             counter += 1
-            img = self.image.read_region((x,y),0,patch_size)#image[y:y + patch_size[1], x:x + patch_size[0]].copy()
+            img = self.image.read_region((x,y),0,patch_size)
             img.save(tmp_x_file_path)
-            #cv2.imwrite(x_file_path, img)
         print("Done: Patch images")
 
 
@@ -1037,18 +1046,13 @@ class OpenSlideOnlivePatch:
         self.LoadImage(filename)
         level_0, region_def = self.LoadTissueMask()
         image = self.image.read_region((region_def[1], region_def[0]), level=0, size=(region_def[3], region_def[2]))
-        patch_images = self.GetPatch(image, level_0, batch_size, patch_size)
+        patch_images = self.GetPatches(image, level_0, batch_size, patch_size, region_def)
         return patch_images
 
-    def GeneratePatchDirectAsImagePatch(self, filename, patch_size=(512,512), batch_size=256, type_data="", n_class=""):
+    def GeneratePatchDirectAsImagePatch(self, filename, patch_size=(512,512), batch_size=128, type_data="", n_class=""):
         self.LoadImage(filename)
         level_0, region_def = self.LoadTissueMask()
-        print(region_def)
-
-        #image = self.image.read_region((region_def[1], region_def[0]), level=0, size=(region_def[3], region_def[2]))
-        #image = np.array(image)
-        #GetPatchesAsFiles
-        self.GetPatchesAsFiles(level_0, batch_size, patch_size, filename, type_data, n_class)
+        self.GetPatchesAsFiles(level_0, batch_size, patch_size, filename, type_data, n_class, region_def)
     # End Major functions
 
 class Filedirectoryamagement():
@@ -1082,7 +1086,7 @@ class Filedirectoryamagement():
 
     def GenerateFileListFromDirectory(self, directories, extension):
         list_of_files = {}
-        print(directories)
+        #print(directories)
         #for dir_c in directories:
         #print(dir_c)
         if (os.path.exists(directories)):
@@ -1090,7 +1094,7 @@ class Filedirectoryamagement():
                 for filename in filenames:
                     # print(extension)
                     if filename.endswith(tuple(extension)):
-                        print(filename)
+                        #print(filename)
                         list_of_files[filename] = os.sep.join([dirpath, filename])
         return list_of_files
 
@@ -1108,7 +1112,7 @@ class Filedirectoryamagement():
         for key in files_keys:
             file_shuffle[key] = self.files[key]
         self.files = file_shuffle
-        print(self.files)
+        #print(self.files)
 
     def GenerateKFoldValidation(self, k=5):
         from sklearn.model_selection import KFold
@@ -1126,18 +1130,9 @@ class Filedirectoryamagement():
                 return fln
         return None
 
-    def generate_patch_images_train_valid_test(self, patch_per_image=100, image_patch_size=(512,512), subset_ratio=[0.6,0.5,0.5], directory="", class_filename="", type_class_col="sample_type"):
+    def generate_patch_images_train_valid_test(self, patch_per_image=100, image_patch_size=(512,512), subset_ratio=[0.7,0.6,0.4], directory="", class_filename="", type_class_col="sample_type"):
         print("Generate file list...")
         self.LoadFiles(Mask=False)
-        #print("The following images were found: ")
-        #print(self.files)
-        #train_length = int(round(len(self.files.keys()) * subset_ratio[0]))
-        #print("train set, n:", train_length)
-        #remaining = len(self.files.keys()) - train_length
-        #test_length = int(round(remaining * subset_ratio[1]))
-        #print("test set, n:", test_length)
-        #valid_length = remaining - test_length
-        #print("valid set, n:", valid_length)
 
         import pandas as pd
         print("Loading the classification file...")
@@ -1149,6 +1144,7 @@ class Filedirectoryamagement():
             sample_id = str_file[0:15]
             sample_id = sample_id.replace("-", ".")
             files_indexed[sample_id] = self.files[file]
+
 
         #Remove rows not having the image file
         data = data.loc[files_indexed.keys(),:]
@@ -1165,10 +1161,10 @@ class Filedirectoryamagement():
         valid_files = []
         for group in files_groups.keys():
             sample_list = files_groups[group]
-            train_length = int(round(len(files_groups[group]) * 0.7))
+            train_length = int(round(len(files_groups[group]) * subset_ratio[0]))
             remaining = len(files_groups[group]) - train_length
 
-            test_length = int(round(remaining * 0.5))
+            test_length = int(round(remaining * subset_ratio[1]))
             valid_length = remaining - test_length
 
             train_files.extend(random.sample(list(sample_list.index), train_length))
@@ -1180,19 +1176,11 @@ class Filedirectoryamagement():
         print("number of samples for test set", len(test_files))
         print("number of samples for validation set", len(valid_files))
 
-
-        '''
-        train_files = random.sample(list(self.files.values()), train_length)
-        remaining = [e for e in list(self.files.values()) if e not in train_files]
-        test_files = random.sample(list(remaining), test_length)
-        valid_files = [e for e in remaining if e not in test_files]
-        '''
-
         files_subsection = {'train':train_files, 'test': test_files, 'valid': valid_files}
         bdx = OpenSlideOnlivePatch(image_folder=directory)
-        #Determine the subclass to generate the directories.
 
-        print("subclasses are ",list_of_unique_value)
+        #Determine the subclass to generate the directories.
+        print("subclasses are ", list_of_unique_value)
 
 
         for type_data in files_subsection.keys():
