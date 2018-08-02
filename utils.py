@@ -891,7 +891,8 @@ class OpenSlideOnlivePatch:
                 image = np.asarray(img)
                 image = image[:, :, 0:3]
                 image = skimage.color.rgb2grey(image)
-
+                plt.imshow(image)
+                plt.show()
                 thresh_min = threshold_otsu(image)
                 binary_min = mask_selected <= thresh_min
                 number_positive = np.count_nonzero(binary_min)
