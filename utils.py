@@ -723,11 +723,8 @@ class OpenSlideOnlivePatch:
         label_image = label(cleared)
         regions = regionprops(label_image)
         level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[3])
-        plt.imshow(level_3)
-        plt.show()
+
         region = self.MaxRegion(regions)
-        plt.imshow(region.filled_image)
-        plt.show()
         minr, minc, maxr, maxc = region.bbox
         minr_new = minr * level_factor
         minc_new = minc * level_factor
@@ -740,7 +737,7 @@ class OpenSlideOnlivePatch:
 
         shape_To_convert = (rect[2], rect[3])
         print(shape_To_convert)
-        level_0 = skimage.transform.resize(region.filled_image, shape_To_convert)
+        level_0 = skimage.transform.resize(region.image, shape_To_convert)
         #cv2.imwrite("./test.png", level_0*255.)
         print("Done: Determine tissue area...")
         return level_0,  rect
@@ -884,12 +881,13 @@ class OpenSlideOnlivePatch:
         #plt.show()
         total_size = patch_size[0] * patch_size[1]
         tolerance = 500
-        count=0
+        count = 0
         while counter < max_patch_number:
-            count = count +1
+            count = count + 1
+            print(count)
             x = random.randint(0,  dimension[1] - patch_size[0])
             y = random.randint(0, dimension[0] - patch_size[1])
-            mask_selected = mask[y:y + patch_size[1], x:x+ patch_size[0]]
+            mask_selected = mask[y:y + patch_size[1], x:x + patch_size[0]]
             number_positive = np.count_nonzero(mask_selected)
 
             percentage_positive = number_positive / total_size
