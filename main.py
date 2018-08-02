@@ -20,7 +20,7 @@ import keras.backend as K
 def GeneratePatchImages(args):
     print("Proc: Running the patch images")
     file_manager = utils.Filedirectoryamagement(mask_directories=None, image_directories=args.source)
-    file_manager.generate_patch_images_train_valid_test(patch_per_image=100, image_patch_size=(512,512), directory=args.destination, class_filename="sample_cnv.csv", type_class_col="CNV_Status")
+    file_manager.generate_patch_images_train_valid_test(patch_per_image=128, image_patch_size=(512,512), directory=args.destination, class_filename="sample_cnv.csv", type_class_col="CNV_Status")
     print("Done: Patch processing...")
 
 def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=False, load_mask=False):
@@ -367,10 +367,10 @@ if __name__ == "__main__":
     parser.add_argument('-gp', '--generate_patch', default=True, action='store_true',
                         help='generate patches')
 
-    parser.add_argument('-s', '--source', default="/home/eminaga/HE")
-    parser.add_argument('-d', '--destination', default="/home/eminaga/Histogenomics")
+    parser.add_argument('-s', '--source', default="/home/eminaga/EncryptedData/Diagnostic_image")
+    parser.add_argument('-d', '--destination', default="/home/eminaga/GPU_Server/GenHistomic")
 
-    parser.add_argument('--input_shape', default=(512,512), action='store_true', help="Define the input shape of the image")
+    parser.add_argument('--input_shape', default=(1024,1024), action='store_true', help="Define the input shape of the image")
     parser.add_argument('--cropping_size', default=(64, 64), action='store_true', help="Define the cropping size")
     parser.add_argument('--filename', default="", help="Define the filename for the test")
     parser.add_argument('--change_lr_threshold', default=5, type=int, help="When to change the learning rate. The epoche number is given.")

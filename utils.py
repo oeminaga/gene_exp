@@ -1033,14 +1033,14 @@ class OpenSlideOnlivePatch:
             data_storage.append([file_to_use, id_itm, pix, maskimage])
         return data_storage
 
-    def GeneratePatchDirect(self, filename, patch_size=(512,512), batch_size=100):
+    def GeneratePatchDirect(self, filename, patch_size=(512,512), batch_size=256):
         self.LoadImage(filename)
         level_0, region_def = self.LoadTissueMask()
         image = self.image.read_region((region_def[1], region_def[0]), level=0, size=(region_def[3], region_def[2]))
         patch_images = self.GetPatch(image, level_0, batch_size, patch_size)
         return patch_images
 
-    def GeneratePatchDirectAsImagePatch(self, filename, patch_size=(512,512), batch_size=100, type_data="", n_class=""):
+    def GeneratePatchDirectAsImagePatch(self, filename, patch_size=(512,512), batch_size=256, type_data="", n_class=""):
         self.LoadImage(filename)
         level_0, region_def = self.LoadTissueMask()
         print(region_def)
