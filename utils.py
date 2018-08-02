@@ -880,7 +880,7 @@ class OpenSlideOnlivePatch:
             x = random.randint(0, dimension[0] - patch_size[0])
             y = random.randint(0, dimension[1] - patch_size[0])
             mask_selected = mask[y:y + patch_size[1], x:x + patch_size[0]]
-            number_positive = np.count_nonzero(binary_min)
+            number_positive = np.count_nonzero(mask_selected)
 
             percentage_positive = number_positive / total_size
             if percentage_positive > 0.90:
