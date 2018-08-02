@@ -886,14 +886,16 @@ class OpenSlideOnlivePatch:
             if percentage_positive > 0.90:
                 from skimage.filters import threshold_otsu
                 img = self.image.read_region((x,y),0,patch_size)
+                plt.imshow(img)
+                plt.show()
                 image = np.asarray(img)
                 image = image[:, :, 0:3]
                 image = skimage.color.rgb2grey(image)
+
                 thresh_min = threshold_otsu(image)
                 binary_min = mask_selected <= thresh_min
                 number_positive = np.count_nonzero(binary_min)
-                plt.imshow(binary_min)
-                plt.show()
+
                 percentage_positive = number_positive / total_size
                 if percentage_positive > 0.90:
                     reg_lst.append([x, y])
