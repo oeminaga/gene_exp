@@ -723,6 +723,8 @@ class OpenSlideOnlivePatch:
         label_image = label(cleared)
         regions = regionprops(label_image)
         level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[3])
+        plt.imshow(level_3)
+        plt.show()
         region = self.MaxRegion(regions)
 
         minr, minc, maxr, maxc = region.bbox
@@ -731,8 +733,6 @@ class OpenSlideOnlivePatch:
 
         maxr_new = maxr * level_factor
         maxc_new = maxc * level_factor
-
-
         rect = (np.around((minr_new[1], minc_new[0], maxr_new[1] - minr_new[1], maxc_new[0] - minc_new[0]),
                          decimals=0)).astype(np.int)
         print(rect)
