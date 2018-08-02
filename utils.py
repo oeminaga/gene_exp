@@ -893,6 +893,7 @@ class OpenSlideOnlivePatch:
                 binary_min = mask_selected <= thresh_min
                 number_positive = np.count_nonzero(binary_min)
                 plt.imshow(binary_min)
+                plt.show()
                 percentage_positive = number_positive / total_size
                 if percentage_positive > 0.90:
                     reg_lst.append([x, y])
