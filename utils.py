@@ -684,6 +684,8 @@ class OpenSlideOnlivePatch:
         from skimage.filters import threshold_minimum
         thresh_min = threshold_minimum(image)
         binary_min = image >= thresh_min
+        plt.imshow(binary_min)
+        plt.show()
         return binary_min
 
     def old_GettissueArea(self, level=3):
@@ -725,7 +727,8 @@ class OpenSlideOnlivePatch:
         cleared = clear_border(level)
         label_image = label(cleared)
         regions = regionprops(label_image)
-        level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[3])
+        heighest_level = len(self.image.level_dimensions[level]) - 1
+        level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[heighest_level])
 
         region = self.MaxRegion(regions)
         minr, minc, maxr, maxc = region.bbox
