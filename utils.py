@@ -735,6 +735,7 @@ class OpenSlideOnlivePatch:
 
         rect = (np.around((minr_new[1], minc_new[0], maxr_new[1] - minr_new[1], maxc_new[0] - minc_new[0]),
                          decimals=0)).astype(np.int)
+        print(rect)
 
         shape_To_convert = (rect[2], rect[3])
         print(shape_To_convert)
@@ -874,6 +875,7 @@ class OpenSlideOnlivePatch:
         :return: A list of X,Y coordinations randomly defined.
         '''
         print("Proc: Random region definition")
+        print(offset_coordination)
         dimension = mask.shape
         reg_lst = []
         counter = 0
@@ -881,7 +883,9 @@ class OpenSlideOnlivePatch:
         #plt.show()
         total_size = patch_size[0] * patch_size[1]
         tolerance = 500
+        count=0
         while counter < max_patch_number:
+            count = count +1
             x = random.randint(0,  dimension[1] - patch_size[0])
             y = random.randint(0, dimension[0] - patch_size[1])
             mask_selected = mask[y:y + patch_size[1], x:x+ patch_size[0]]
@@ -895,15 +899,15 @@ class OpenSlideOnlivePatch:
                 image = np.asarray(img)
                 image = image[:, :, 0:3]
                 image = skimage.color.rgb2grey(image)
-                binary_min = image <= 0.8
+                binary_min = image <= 0.75
                 number_positive = np.count_nonzero(binary_min)
                 percentage_positive = number_positive / total_size
                 if percentage_positive > 0.70:
                     reg_lst.append([x, y])
                     counter = counter + 1
-                if counter >= tolerance:
-                    print("Stopped after 500 tries...")
-                    break
+            if count >= tolerance:
+                print("Stopped after 500 tries...")
+                break
 
         print("Done: Random region definition")
         return reg_lst
