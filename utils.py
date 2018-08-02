@@ -673,19 +673,18 @@ class OpenSlideOnlivePatch:
         polygons = self.ExtractPolygons(ET.parse(filename).getroot(), return_identity_list=return_identity_list, LoadAll=LoadAll, select_criteria=self.select_criteria)
         return polygons
 
-    def old_GettissueArea(self,level=3):
+    def _GettissueArea(self,level=3):
         image = self.image.read_region((0, 0), level, self.image.level_dimensions[level])
         image = np.asarray(image)
         image = image[:, :, 0:3]
         HE = color.rgb2hed(image)
-        BackgroundColor_0 = np.max(HE[0:10, 0:10, 2])
-        tissues = HE[:, :, 2]
-        tissues = filters.gaussian(tissues, 2)
-        tissues = tissues >= (BackgroundColor_0 * 0.99)
-        tissues = morphology.opening(tissues, square(10))
-        return tissues
+        tissues = HE[:, :, 0]
+        from skimage.filters import threshold_minimum
+        thresh_min = threshold_minimum(image)
+        binary_min = image >= thresh_min
+        return binary_min
 
-    def _GettissueArea(self, level=3):
+    def old_GettissueArea(self, level=3):
         image = self.image.read_region((0, 0), level, self.image.level_dimensions[level])
         image = np.asarray(image)
         image = image[:, :, 0:3]
