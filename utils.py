@@ -674,6 +674,8 @@ class OpenSlideOnlivePatch:
         return polygons
 
     def _GettissueArea(self,level=3):
+        heighest_level = len(self.image.level_dimensions[level]) -1
+        level = heighest_level
         image = self.image.read_region((0, 0), level, self.image.level_dimensions[level])
         image = np.asarray(image)
         image = image[:, :, 0:3]
@@ -685,6 +687,8 @@ class OpenSlideOnlivePatch:
         return binary_min
 
     def old_GettissueArea(self, level=3):
+        heighest_level = len(self.image.level_dimensions[level]) - 1
+        level = heighest_level
         image = self.image.read_region((0, 0), level, self.image.level_dimensions[level])
         image = np.asarray(image)
         image = image[:, :, 0:3]
