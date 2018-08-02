@@ -890,14 +890,12 @@ class OpenSlideOnlivePatch:
                 image = image[:, :, 0:3]
                 image = skimage.color.rgb2grey(image)
                 thresh_min = threshold_otsu(image)
-                binary_min = image <= thresh_min
+                binary_min = image < 0.97
                 number_positive = np.count_nonzero(binary_min)
                 percentage_positive = number_positive / total_size
                 if percentage_positive > 0.90:
                     reg_lst.append([x, y])
                     counter = counter + 1
-                else:
-                    print("Escape")
 
         print("Done: Random region definition")
         return reg_lst
