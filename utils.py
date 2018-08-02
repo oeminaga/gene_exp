@@ -896,7 +896,6 @@ class OpenSlideOnlivePatch:
                 if percentage_positive > 0.90:
                     reg_lst.append([x, y])
                     counter = counter + 1
-
         print("Done: Random region definition")
         return reg_lst
 
