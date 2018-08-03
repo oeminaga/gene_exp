@@ -692,7 +692,7 @@ class OpenSlideOnlivePatch:
         thresh_min = threshold_minimum(tissues)# , 35, offset=10)
         #if thresh_min>(-0.95):
         #    thresh_min = (-1.3)
-        binary_min = np.logical_and(tissues >= (-1.26), tissues < (-1.1))
+        binary_min = np.logical_and(tissues >= (-1.245), tissues < (-1.1))
         binary_min = morphology.closing(binary_min, square(2))
         #binary_min = morphology.opening(binary_min, square(4))
 
@@ -734,8 +734,6 @@ class OpenSlideOnlivePatch:
         '''
         print("Proc: Determine tissue area...")
         level_3 = self._GettissueArea(3)
-        plt.imshow(level_3)
-        plt.show()
         level = level_3
         cleared = clear_border(level)
         label_image = label(cleared)
@@ -744,6 +742,8 @@ class OpenSlideOnlivePatch:
         level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[heighest_level])
 
         region = self.MaxRegion(regions)
+        plt.imshow(region.image)
+        plt.show()
         minr, minc, maxr, maxc = region.bbox
         minr_new = minr * level_factor
         minc_new = minc * level_factor
