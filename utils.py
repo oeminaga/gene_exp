@@ -721,7 +721,8 @@ class OpenSlideOnlivePatch:
         '''
         print("Proc: Determine tissue area...")
         level_3 = self._GettissueArea(3)
-
+        plt.imshow(level_3)
+        plt.show()
         level = level_3
         cleared = clear_border(level)
         label_image = label(cleared)
@@ -915,54 +916,6 @@ class OpenSlideOnlivePatch:
                 number_positive = np.count_nonzero(binary_min)
                 percentage_positive = number_positive / total_size
                 if percentage_positive > 0.80:
-                    reg_lst.append([x, y])
-                    counter = counter + 1
-            if count >= tolerance:
-                print("Stopped after 500 tries...")
-                break
-
-        print("Done: Random region definition")
-        return reg_lst
-
-    def RandomRegionDefinition(self, mask, offset_coordination, max_patch_number, patch_size):
-        '''
-        :param mask: mask image
-        :param max_patch_number: Define the batch size
-        :param patch_size: Define the patch dimension
-        :return: A list of X,Y coordinations randomly defined.
-        '''
-        print("Proc: Random region definition")
-        print(offset_coordination)
-        dimension = mask.shape
-        reg_lst = []
-        counter = 0
-        #plt.imshow(mask)
-        #plt.show()
-        total_size = patch_size[0] * patch_size[1]
-        tolerance = 500
-        count = 0
-        while counter < max_patch_number:
-            count = count + 1
-            x = random.randint(0,  dimension[1] - patch_size[0])
-            y = random.randint(0, dimension[0] - patch_size[1])
-            mask_selected = mask[y:y + patch_size[1], x:x + patch_size[0]]
-            number_positive = np.count_nonzero(mask_selected)
-
-            percentage_positive = number_positive / total_size
-            if percentage_positive > 0.90:
-                x = x + offset_coordination[1]
-                y = y + offset_coordination[0]
-                img = self.image.read_region((x,y),0,patch_size)
-                image = np.asarray(img)
-                image = image[:, :, 0:3]
-                HE = color.rgb2hed(image)
-                tissues = HE[:, :, 0]
-                from skimage.filters import threshold_minimum
-                thresh_min = threshold_minimum(tissues)
-                binary_min = image <= thresh_min
-                number_positive = np.count_nonzero(binary_min)
-                percentage_positive = number_positive / total_size
-                if percentage_positive > 0.70:
                     reg_lst.append([x, y])
                     counter = counter + 1
             if count >= tolerance:
