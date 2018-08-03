@@ -681,23 +681,14 @@ class OpenSlideOnlivePatch:
         image = self.image.read_region((0, 0), level, self.image.level_dimensions[level])
         image = np.asarray(image, dtype=np.uint8)
         image = image[:, :, 0:3]
-        plt.imshow(image)
-        plt.show()
-        HE = rgb2grey(image)#color.rgb2hed(image)
-        tissues = HE #[:, :, 0]
+        HE = rgb2grey(image)
+        tissues = HE
         tissues = filters.gaussian(tissues,2)
-        plt.imshow(tissues)
-        plt.show()
-        from skimage.filters import threshold_otsu, threshold_local
-        thresh_min = threshold_otsu(tissues)# , 35, offset=10)
-        #if thresh_min>(-0.95):
-        #    thresh_min = (-1.3)
-        binary_min = tissues <= thresh_min#np.percentile(thresh_min,70), tissues < (-1.10))
-        binary_min = morphology.closing(binary_min, square(6))
-        #binary_min = morphology.opening(binary_min, square(4))
-
-        plt.imshow(binary_min)
-        plt.show()
+        from skimage.filters import threshold_otsu
+        thresh_min = threshold_otsu(tissues)
+        binary_min = tissues <= thresh_min
+        binary_min = morphology.closing(binary_min, square(3))
+        binary_min = morphology.opening(tissues, square(3))
         return binary_min
 
     def old_GettissueArea(self, level=3):
@@ -723,7 +714,7 @@ class OpenSlideOnlivePatch:
         for region in regions:
             if rx is None:
                 rx = region
-            elif rx.area < region.area:
+            elif rx.filled_area < region.filled_area:
                 rx = region
         return rx
 
@@ -750,6 +741,7 @@ class OpenSlideOnlivePatch:
 
         maxr_new = maxr * level_factor
         maxc_new = maxc * level_factor
+
         rect = (np.around((minr_new[1], minc_new[0], maxr_new[1] - minr_new[1], maxc_new[0] - minc_new[0]),
                          decimals=0)).astype(np.int)
         print(rect)
