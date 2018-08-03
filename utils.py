@@ -924,9 +924,9 @@ class OpenSlideOnlivePatch:
                 image = image[:, :, 0:3]
                 HE = color.rgb2hed(image)
                 tissues = HE[:, :, 0]
-                from skimage.filters import threshold_minimum
-                thresh_min = threshold_minimum(tissues)
-                binary_min = tissues <= thresh_min
+                from skimage.filters import threshold_otsu
+                thresh_min = threshold_otsu(tissues)
+                binary_min = tissues > thresh_min
                 number_positive = np.count_nonzero(binary_min)
                 percentage_positive = number_positive / total_size
                 if percentage_positive > 0.80:
