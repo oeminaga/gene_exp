@@ -690,6 +690,7 @@ class OpenSlideOnlivePatch:
         from skimage.filters import threshold_minimum, threshold_adaptive
         thresh_min = threshold_adaptive(tissues)
         binary_min = np.logical_and(tissues > thresh_min, tissues < (-0.95))
+        binary_min = morphology.opening(binary_min, square(2))
         plt.imshow(binary_min)
         plt.show()
         return binary_min
