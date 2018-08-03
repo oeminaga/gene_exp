@@ -682,9 +682,10 @@ class OpenSlideOnlivePatch:
         image = np.asarray(image, dtype=np.uint8)
         image = image[:, :, 0:3]
         plt.imshow(image)
+        plt.show()
         HE = color.rgb2hed(image)
         tissues = HE[:, :, 0]
-        plt.imshow(HE)
+        plt.imshow(tissues)
         plt.show()
         from skimage.filters import threshold_minimum
         thresh_min = threshold_minimum(tissues)
