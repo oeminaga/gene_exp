@@ -683,8 +683,8 @@ class OpenSlideOnlivePatch:
         image = image[:, :, 0:3]
         plt.imshow(image)
         plt.show()
-        HE = color.rgb2hed(image)
-        tissues = HE[:, :, 0]
+        HE = rgb2grey(image)#color.rgb2hed(image)
+        tissues = HE #[:, :, 0]
         tissues = filters.gaussian(tissues,2)
         plt.imshow(tissues)
         plt.show()
@@ -692,7 +692,7 @@ class OpenSlideOnlivePatch:
         thresh_min = threshold_otsu(tissues)# , 35, offset=10)
         #if thresh_min>(-0.95):
         #    thresh_min = (-1.3)
-        binary_min = np.logical_and(tissues >= np.percentile(thresh_min,70), tissues < (-1.10))
+        binary_min = tissues <= thresh_min)#np.percentile(thresh_min,70), tissues < (-1.10))
         binary_min = morphology.closing(binary_min, square(6))
         #binary_min = morphology.opening(binary_min, square(4))
 
