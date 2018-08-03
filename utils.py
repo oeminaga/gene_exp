@@ -744,10 +744,10 @@ class OpenSlideOnlivePatch:
         shape_To_convert = (rect[2], rect[3])
         print(shape_To_convert)
 
-        level_0 = skimage.transform.resize(region.image, shape_To_convert)
+        level_0 = region.image #skimage.transform.resize(region.image, shape_To_convert)
         #cv2.imwrite("./test.png", level_0*255.)
         print("Done: Determine tissue area...")
-        return level_0,  rect
+        return level_0,  rect, level_factor[0]
 
     def GetLesionIdentity(self, xml_root, AttributeParameter="Description", AttributeValue="LCM"):
         '''
@@ -872,6 +872,59 @@ class OpenSlideOnlivePatch:
         else:
             return polys
 
+
+    def RandomRegionDefinition(self, mask, offset_coordination, max_patch_number, patch_size, factor=1):
+        '''
+        :param mask: mask image
+        :param max_patch_number: Define the batch size
+        :param patch_size: Define the patch dimension
+        :return: A list of X,Y coordinations randomly defined.
+        '''
+        print("Proc: Random region definition")
+        print(offset_coordination)
+        dimension = mask.shape
+        reg_lst = []
+        counter = 0
+        #plt.imshow(mask)
+        #plt.show()
+        total_size = patch_size[0] * patch_size[1]
+        tolerance = 500
+        count = 0
+        patch_x_length =  int(round(patch_size[0] / factor))
+        patch_y_length = int(round(patch_size[1] / factor))
+        while counter < max_patch_number:
+            count = count + 1
+            x = random.randint(0,  dimension[1] - patch_x_length)
+            y = random.randint(0, dimension[0] - patch_y_length)
+
+            mask_selected = mask[y:y + patch_y_length, x:x + patch_x_length]
+            number_positive = np.count_nonzero(mask_selected)
+
+            percentage_positive = number_positive / total_size
+            if percentage_positive > 0.80:
+                x = (x * factor) + offset_coordination[1]
+                y = (y * factor) + offset_coordination[0]
+
+                img = self.image.read_region((x,y),0,patch_size)
+                image = np.asarray(img)
+                image = image[:, :, 0:3]
+                HE = color.rgb2hed(image)
+                tissues = HE[:, :, 0]
+                from skimage.filters import threshold_minimum
+                thresh_min = threshold_minimum(tissues)
+                binary_min = image <= thresh_min
+                number_positive = np.count_nonzero(binary_min)
+                percentage_positive = number_positive / total_size
+                if percentage_positive > 0.80:
+                    reg_lst.append([x, y])
+                    counter = counter + 1
+            if count >= tolerance:
+                print("Stopped after 500 tries...")
+                break
+
+        print("Done: Random region definition")
+        return reg_lst
+
     def RandomRegionDefinition(self, mask, offset_coordination, max_patch_number, patch_size):
         '''
         :param mask: mask image
@@ -936,8 +989,8 @@ class OpenSlideOnlivePatch:
             patch_imgs[index] = image[y:y + patch_size[1], x:x + patch_size[0]].copy()
         return patch_imgs
 
-    def GetPatchesAsFiles(self,mask, patch_per_image, patch_size, filename, type_data="train", n_class="", coordination=(0,0,0,0)):
-        regions = self.RandomRegionDefinition(mask, coordination, patch_per_image, patch_size)
+    def GetPatchesAsFiles(self,mask, patch_per_image, patch_size, filename, type_data="train", n_class="", coordination=(0,0,0,0), factor=0):
+        regions = self.RandomRegionDefinition(mask, coordination, patch_per_image, patch_size, factor)
         print("Proc: Generate patch images....")
         file_ex = os.path.basename(filename)
         file_to_use = os.path.splitext(file_ex)[0]
@@ -1056,15 +1109,15 @@ class OpenSlideOnlivePatch:
 
     def GeneratePatchDirect(self, filename, patch_size=(512,512), batch_size=256):
         self.LoadImage(filename)
-        level_0, region_def = self.LoadTissueMask()
+        level_0, region_def, factor = self.LoadTissueMask()
         image = self.image.read_region((region_def[1], region_def[0]), level=0, size=(region_def[3], region_def[2]))
         patch_images = self.GetPatches(image, level_0, batch_size, patch_size, region_def)
         return patch_images
 
     def GeneratePatchDirectAsImagePatch(self, filename, patch_size=(512,512), batch_size=128, type_data="", n_class=""):
         self.LoadImage(filename)
-        level_0, region_def = self.LoadTissueMask()
-        self.GetPatchesAsFiles(level_0, batch_size, patch_size, filename, type_data, n_class, region_def)
+        level_0, region_def, factor = self.LoadTissueMask()
+        self.GetPatchesAsFiles(level_0, batch_size, patch_size, filename, type_data, n_class, region_def, factor)
     # End Major functions
 
 class Filedirectoryamagement():
