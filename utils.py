@@ -714,7 +714,7 @@ class OpenSlideOnlivePatch:
         for region in regions:
             if rx is None:
                 rx = region
-            elif rx.filled_area < region.filled_area:
+            elif rx.bbox_area < region.bbox_area:
                 rx = region
         return rx
 
@@ -726,14 +726,16 @@ class OpenSlideOnlivePatch:
         print("Proc: Determine tissue area...")
         level_3 = self._GettissueArea(3)
         plt.imshow(level_3)
+        plt.show()
         level = level_3
         cleared = clear_border(level)
         label_image = label(cleared)
         regions = regionprops(label_image)
         heighest_level = len(self.image.level_dimensions) - 1
         level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[heighest_level])
-
+        print(regions)
         region = self.MaxRegion(regions)
+
         plt.imshow(region.image)
         plt.show()
         minr, minc, maxr, maxc = region.bbox
