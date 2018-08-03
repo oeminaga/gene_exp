@@ -695,7 +695,7 @@ class OpenSlideOnlivePatch:
         image = np.asarray(image)
         image = image[:, :, 0:3]
         image = skimage.color.rgb2grey(image)
-        from skimage.filters import threshold_minimum, threshold_otsu
+        from skimage.filters import threshold_otsu
         image = filters.gaussian(image, 2)
         thresh_min = threshold_otsu(image)
         binary_min = image <= thresh_min
