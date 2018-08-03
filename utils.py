@@ -689,7 +689,7 @@ class OpenSlideOnlivePatch:
         plt.show()
         from skimage.filters import threshold_minimum, threshold_mean
         thresh_min = threshold_mean(tissues)
-        binary_min = np.logical_and(tissues >= thresh_min, tissues < (-0.95))
+        binary_min = np.logical_and(tissues > thresh_min, tissues < (-0.95))
         plt.imshow(binary_min)
         plt.show()
         return binary_min
