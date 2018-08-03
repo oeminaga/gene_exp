@@ -927,6 +927,7 @@ class OpenSlideOnlivePatch:
                 from skimage.filters import threshold_otsu
                 thresh_min = threshold_otsu(tissues)
                 binary_min = tissues > thresh_min
+                print("Fired...")
                 number_positive = np.count_nonzero(binary_min)
                 percentage_positive = number_positive / total_size
                 if percentage_positive > 0.80:
