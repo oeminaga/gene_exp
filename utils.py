@@ -688,7 +688,7 @@ class OpenSlideOnlivePatch:
         thresh_min = threshold_otsu(tissues)
         binary_min = tissues <= thresh_min
         binary_min = morphology.closing(binary_min, square(3))
-        binary_min = morphology.opening(tissues, square(3))
+        binary_min = morphology.opening(binary_min, square(3))
         return binary_min
 
     def old_GettissueArea(self, level=3):
