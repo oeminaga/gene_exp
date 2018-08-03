@@ -18,7 +18,7 @@ import random
 
 from scipy.ndimage import gaussian_filter
 from skimage import color, filters, morphology
-from skimage.color import rgb2hsv, rgb2grey
+from skimage.color import rgb2hsv, rgb2grey, rgb2hed
 from skimage.exposure import rescale_intensity
 from skimage.morphology import square
 import skimage
@@ -682,8 +682,8 @@ class OpenSlideOnlivePatch:
         HE = color.rgb2hed(image)
         tissues = HE[:, :, 0]
         from skimage.filters import threshold_minimum
-        thresh_min = threshold_minimum(image)
-        binary_min = image >= thresh_min
+        thresh_min = threshold_minimum(tissues)
+        binary_min = image <= thresh_min
         plt.imshow(binary_min)
         plt.show()
         return binary_min
@@ -891,7 +891,6 @@ class OpenSlideOnlivePatch:
         count = 0
         while counter < max_patch_number:
             count = count + 1
-            print(count)
             x = random.randint(0,  dimension[1] - patch_size[0])
             y = random.randint(0, dimension[0] - patch_size[1])
             mask_selected = mask[y:y + patch_size[1], x:x + patch_size[0]]
@@ -904,8 +903,11 @@ class OpenSlideOnlivePatch:
                 img = self.image.read_region((x,y),0,patch_size)
                 image = np.asarray(img)
                 image = image[:, :, 0:3]
-                image = skimage.color.rgb2grey(image)
-                binary_min = image <= 0.75
+                HE = color.rgb2hed(image)
+                tissues = HE[:, :, 0]
+                from skimage.filters import threshold_minimum
+                thresh_min = threshold_minimum(tissues)
+                binary_min = image <= thresh_min
                 number_positive = np.count_nonzero(binary_min)
                 percentage_positive = number_positive / total_size
                 if percentage_positive > 0.70:
@@ -940,7 +942,7 @@ class OpenSlideOnlivePatch:
         file_ex = os.path.basename(filename)
         file_to_use = os.path.splitext(file_ex)[0]
         n_class = int(round(n_class,0))
-        x_file_path = self.image_folder + "/" + type_data + "/"+ str(n_class) + "/"
+        x_file_path = self.image_folder + "/%s/%s/" % (type_data,n_class)
         counter = 0
         str_input_path = "/%s/%s/" % (type_data, n_class)
         make_folders(self.image_folder, str_input_path)
