@@ -688,7 +688,7 @@ class OpenSlideOnlivePatch:
         plt.imshow(tissues)
         plt.show()
         from skimage.filters import threshold_minimum, threshold_local
-        thresh_min = threshold_local(tissues, 35, offset=10)
+        thresh_min = threshold_minimum(tissues)# , 35, offset=10)
         binary_min = np.logical_and(tissues > thresh_min, tissues < (-0.95))
         binary_min = morphology.closing(binary_min, square(4))
         binary_min = morphology.opening(binary_min, square(4))
@@ -757,6 +757,7 @@ class OpenSlideOnlivePatch:
         level_0 = region.image #skimage.transform.resize(region.image, shape_To_convert)
         #cv2.imwrite("./test.png", level_0*255.)
         print("Done: Determine tissue area...")
+        print("factors: ",level_factor)
         return level_0,  rect, level_factor[0]
 
     def GetLesionIdentity(self, xml_root, AttributeParameter="Description", AttributeValue="LCM"):
