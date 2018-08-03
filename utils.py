@@ -676,15 +676,21 @@ class OpenSlideOnlivePatch:
     def _GettissueArea(self,level=3):
         heighest_level = len(self.image.level_dimensions) -1
         level = heighest_level
-
+        print(level)
+        print(self.image.level_dimensions[level])
         image = self.image.read_region((0, 0), level, self.image.level_dimensions[level])
         image = np.asarray(image)
         image = image[:, :, 0:3]
+        plt.imshow(image)
         HE = color.rgb2hed(image)
         tissues = HE[:, :, 0]
+        plt.imshow(HE)
+        plt.show()
         from skimage.filters import threshold_minimum
         thresh_min = threshold_minimum(tissues)
-        binary_min = tissues >= thresh_min
+        binary_min = tissues <= thresh_min
+        plt.imshow(binary_min)
+        plt.show()
         return binary_min
 
     def old_GettissueArea(self, level=3):
