@@ -729,17 +729,17 @@ class OpenSlideOnlivePatch:
         #plt.show()
         level = level_3
         cleared = level_3#clear_border(level)
-        plt.imshow(cleared)
-        plt.show()
+        #plt.imshow(cleared)
+        #plt.show()
         label_image = label(cleared, connectivity=2, background=0)
         regions = regionprops(label_image)
         heighest_level = len(self.image.level_dimensions) - 1
         level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[heighest_level])
-        print(regions)
+        #print(regions)
         region = self.MaxRegion(regions)
 
-        plt.imshow(region.image)
-        plt.show()
+        #plt.imshow(region.image)
+        #plt.show()
         minr, minc, maxr, maxc = region.bbox
         minr_new = minr * level_factor
         minc_new = minc * level_factor
@@ -912,6 +912,7 @@ class OpenSlideOnlivePatch:
             number_positive = np.count_nonzero(mask_selected)
 
             percentage_positive = number_positive / total_size
+            print(percentage_positive)
             if percentage_positive > 0.80:
                 x = (x * factor) + offset_coordination[1]
                 y = (y * factor) + offset_coordination[0]
