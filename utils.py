@@ -903,7 +903,7 @@ class OpenSlideOnlivePatch:
         patch_x_length =  int(round(patch_size[0] / factor))
         patch_y_length = int(round(patch_size[1] / factor))
         total_size = patch_y_length*patch_x_length
-        print(patch_y_length, patch_x_length)
+        #print(patch_y_length, patch_x_length)
         while counter < max_patch_number:
             count = count + 1
             x = random.randint(0,  dimension[1] - patch_x_length)
@@ -913,7 +913,7 @@ class OpenSlideOnlivePatch:
             number_positive = np.count_nonzero(mask_selected)
 
             percentage_positive = number_positive / total_size
-            print(percentage_positive)
+            #print(percentage_positive)
             if percentage_positive > 0.80:
                 x = (x * factor) + offset_coordination[1]
                 y = (y * factor) + offset_coordination[0]
@@ -926,7 +926,7 @@ class OpenSlideOnlivePatch:
                 from skimage.filters import threshold_otsu
                 thresh_min = threshold_otsu(tissues)
                 binary_min = tissues > thresh_min
-                print("Fired...")
+                #print("Fired...")
                 number_positive = np.count_nonzero(binary_min)
                 percentage_positive = number_positive / total_size
                 if percentage_positive > 0.80:
