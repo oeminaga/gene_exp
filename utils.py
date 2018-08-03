@@ -728,7 +728,7 @@ class OpenSlideOnlivePatch:
         #plt.imshow(level_3)
         #plt.show()
         level = level_3
-        cleared = clear_border(level)
+        cleared = level_3#clear_border(level)
         plt.imshow(cleared)
         plt.show()
         label_image = label(cleared, connectivity=2, background=0)
