@@ -898,11 +898,11 @@ class OpenSlideOnlivePatch:
         counter = 0
         #plt.imshow(mask)
         #plt.show()
-        total_size = patch_size[0] * patch_size[1]
         tolerance = 500
         count = 0
         patch_x_length =  int(round(patch_size[0] / factor))
         patch_y_length = int(round(patch_size[1] / factor))
+        total_size = patch_y_length*patch_x_length
         print(patch_y_length, patch_x_length)
         while counter < max_patch_number:
             count = count + 1
