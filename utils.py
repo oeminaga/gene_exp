@@ -684,7 +684,7 @@ class OpenSlideOnlivePatch:
         tissues = HE[:, :, 0]
         from skimage.filters import threshold_minimum
         thresh_min = threshold_minimum(tissues)
-        binary_min = tissues <= thresh_min
+        binary_min = tissues >= thresh_min
         return binary_min
 
     def old_GettissueArea(self, level=3):
