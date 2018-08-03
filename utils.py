@@ -688,11 +688,11 @@ class OpenSlideOnlivePatch:
         tissues = filters.gaussian(tissues,2)
         plt.imshow(tissues)
         plt.show()
-        from skimage.filters import threshold_minimum, threshold_local
-        thresh_min = threshold_minimum(tissues)# , 35, offset=10)
+        from skimage.filters import threshold_otsu, threshold_local
+        thresh_min = threshold_otsu(tissues)# , 35, offset=10)
         #if thresh_min>(-0.95):
         #    thresh_min = (-1.3)
-        binary_min = np.logical_and(tissues >= (-1.28), tissues < (-1.03))
+        binary_min = np.logical_and(tissues >= thresh_min, tissues < (-1.03))
         binary_min = morphology.closing(binary_min, square(6))
         #binary_min = morphology.opening(binary_min, square(4))
 
