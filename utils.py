@@ -691,7 +691,7 @@ class OpenSlideOnlivePatch:
         thresh_min = threshold_minimum(tissues)# , 35, offset=10)
         #if thresh_min>(-0.95):
         #    thresh_min = (-1.3)
-        binary_min = np.logical_and(tissues > (-1.3), tissues < (-0.95))
+        binary_min = np.logical_and(tissues > (-1.29), tissues < (-0.1))
         binary_min = morphology.closing(binary_min, square(4))
         binary_min = morphology.opening(binary_min, square(4))
 
