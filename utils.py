@@ -687,9 +687,9 @@ class OpenSlideOnlivePatch:
         tissues = HE[:, :, 0]
         plt.imshow(tissues)
         plt.show()
-        from skimage.filters import threshold_otsu
-        thresh_min = threshold_otsu(tissues)
-        binary_min = tissues >= thresh_min
+        from skimage.filters import threshold_minimum
+        thresh_min = threshold_minimum(tissues)
+        binary_min = tissues >= thresh_min and tissues < (-0.85)
         plt.imshow(binary_min)
         plt.show()
         return binary_min
