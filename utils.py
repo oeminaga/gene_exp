@@ -729,7 +729,7 @@ class OpenSlideOnlivePatch:
         plt.show()
         level = level_3
         cleared = clear_border(level)
-        label_image = label(cleared)
+        label_image = label(cleared, connectivity=8, background=0)
         regions = regionprops(label_image)
         heighest_level = len(self.image.level_dimensions) - 1
         level_factor = np.divide(self.image.level_dimensions[0], self.image.level_dimensions[heighest_level])
