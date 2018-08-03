@@ -679,7 +679,7 @@ class OpenSlideOnlivePatch:
         print(level)
         print(self.image.level_dimensions[level])
         image = self.image.read_region((0, 0), level, self.image.level_dimensions[level])
-        image = np.asarray(image)
+        image = np.asarray(image, dtype=np.uint8)
         image = image[:, :, 0:3]
         plt.imshow(image)
         HE = color.rgb2hed(image)
@@ -697,7 +697,7 @@ class OpenSlideOnlivePatch:
         heighest_level = len(self.image.level_dimensions) - 1
         level = heighest_level
         image = self.image.read_region((0, 0), level, self.image.level_dimensions[level])
-        image = np.asarray(image)
+        image = np.asarray(image, dtype=np.uint8)
         image = image[:, :, 0:3]
         image = skimage.color.rgb2grey(image)
         from skimage.filters import threshold_otsu
@@ -912,7 +912,7 @@ class OpenSlideOnlivePatch:
                 y = (y * factor) + offset_coordination[0]
 
                 img = self.image.read_region((x,y),0,patch_size)
-                image = np.asarray(img)
+                image = np.asarray(img, dtype=np.uint8)
                 image = image[:, :, 0:3]
                 HE = color.rgb2hed(image)
                 tissues = HE[:, :, 0]
