@@ -687,10 +687,12 @@ class OpenSlideOnlivePatch:
         tissues = HE[:, :, 0]
         plt.imshow(tissues)
         plt.show()
-        from skimage.filters import threshold_minimum, threshold_otsu
-        thresh_min = threshold_otsu(tissues)
+        from skimage.filters import threshold_minimum, threshold_local
+        thresh_min = threshold_local(tissues, 35, offset=10)
         binary_min = np.logical_and(tissues > thresh_min, tissues < (-0.95))
-        binary_min = morphology.opening(binary_min, square(2))
+        binary_min = morphology.closing(binary_min, square(4))
+        binary_min = morphology.opening(binary_min, square(4))
+
         plt.imshow(binary_min)
         plt.show()
         return binary_min
