@@ -725,10 +725,12 @@ class OpenSlideOnlivePatch:
         '''
         print("Proc: Determine tissue area...")
         level_3 = self._GettissueArea(3)
-        plt.imshow(level_3)
-        plt.show()
+        #plt.imshow(level_3)
+        #plt.show()
         level = level_3
         cleared = clear_border(level)
+        plt.imshow(cleared)
+        plt.show()
         label_image = label(cleared, connectivity=2, background=0)
         regions = regionprops(label_image)
         heighest_level = len(self.image.level_dimensions) - 1
