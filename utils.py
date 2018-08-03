@@ -903,6 +903,7 @@ class OpenSlideOnlivePatch:
         count = 0
         patch_x_length =  int(round(patch_size[0] / factor))
         patch_y_length = int(round(patch_size[1] / factor))
+        print(patch_y_length, patch_x_length)
         while counter < max_patch_number:
             count = count + 1
             x = random.randint(0,  dimension[1] - patch_x_length)
