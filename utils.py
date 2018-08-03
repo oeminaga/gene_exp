@@ -917,7 +917,8 @@ class OpenSlideOnlivePatch:
             if percentage_positive > 0.80:
                 x = (x * factor) + offset_coordination[1]
                 y = (y * factor) + offset_coordination[0]
-
+                x = int(round(x,0))
+                y = int(round(y,0))
                 img = self.image.read_region((x,y),0,patch_size)
                 image = np.asarray(img, dtype=np.uint8)
                 image = image[:, :, 0:3]
