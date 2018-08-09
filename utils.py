@@ -1180,6 +1180,7 @@ class Filedirectoryamagement():
             str_file = os.path.splitext(file)[0]
             sample_id = str_file[0:15]
             sample_id = sample_id.replace("-", ".")
+            print(sample_id)
             files_indexed[sample_id] = self.files[file]
 
         print(len(files_indexed.keys()))
