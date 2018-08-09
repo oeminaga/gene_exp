@@ -1180,12 +1180,12 @@ class Filedirectoryamagement():
             str_file = os.path.splitext(file)[0]
             sample_id = str_file[0:15]
             sample_id = sample_id.replace("-", ".")
-            print(sample_id)
+            #print(sample_id)
             files_indexed[sample_id] = self.files[file]
 
         print(len(files_indexed.keys()))
         print("Remove not existing index from the key list...")
-        keys_list = files_indexed.keys()
+        keys_list = list(files_indexed.keys())
         for key in keys_list:
             if key not in data.index:
                 del files_indexed[key]
