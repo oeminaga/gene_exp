@@ -1176,7 +1176,7 @@ class Filedirectoryamagement():
                 return fln
         return None
 
-    def generate_patch_images_train_valid_test(self, patch_per_image=100, image_patch_size=(512,512), subset_ratio=[0.6,0.8,0.2], directory="", class_filename="", type_class_col="sample_type"):
+    def generate_patch_images_train_valid_test(self, patch_per_image=100, image_patch_size=(512,512), subset_ratio=[0.7,0.7,0.3], directory="", class_filename="", type_class_col="sample_type"):
         print("Generate file list...")
         self.LoadFiles(Mask=False)
 
