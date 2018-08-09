@@ -1184,8 +1184,14 @@ class Filedirectoryamagement():
             files_indexed[sample_id] = self.files[file]
 
         print(len(files_indexed.keys()))
+        print("Remove not existing index from the key list...")
+        keys_list = files_indexed.keys()
+        for key in keys_list:
+            if key not in data.index:
+                del files_indexed[key]
         #Remove rows not having the image file
-        data = data.loc[files_indexed.keys(),:]
+        print("Select only the data of available images...")
+        data = data.iloc[files_indexed.keys()]
 
         #Get the classes
         list_of_unique_value = pd.Series(data.CNV_Status, name=type_class_col).unique()
