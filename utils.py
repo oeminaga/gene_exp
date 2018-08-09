@@ -1196,7 +1196,7 @@ class Filedirectoryamagement():
         data = data.loc[files_indexed.keys(),:]
 
         #Get the classes
-        list_of_unique_value = pd.Series(data.CNV_Status, name=type_class_col).unique()
+        list_of_unique_value = data[type_class_col].unique() #pd.Series(data[type_class_col], name=type_class_col).unique()
         print("Classes: ", list_of_unique_value)
 
         files_groups = {}
