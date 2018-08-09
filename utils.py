@@ -1174,6 +1174,7 @@ class Filedirectoryamagement():
         import pandas as pd
         print("Loading the classification file...")
         data = pd.read_csv(class_filename, index_col=0)
+        print(data)
         print("dim: ",data.shape)
         files_indexed = {}
         for file in self.files.keys():
@@ -1196,9 +1197,10 @@ class Filedirectoryamagement():
 
         #Get the classes
         list_of_unique_value = pd.Series(data.CNV_Status, name=type_class_col).unique()
-
+        print("Classes: ", list_of_unique_value)
 
         files_groups = {}
+        print(type_class_col)
         for x in list_of_unique_value:
             files_groups[x] = data.loc[data[type_class_col] == x, type_class_col]
 
@@ -1208,11 +1210,11 @@ class Filedirectoryamagement():
         for group in files_groups.keys():
             sample_list = files_groups[group]
             train_length = int(round(len(files_groups[group]) * subset_ratio[0]))
+            print("train: ",train_length)
             remaining = len(files_groups[group]) - train_length
-
+            print("test and valid: ", remaining)
             test_length = int(round(remaining * subset_ratio[1]))
             valid_length = remaining - test_length
-
             train_files.extend(random.sample(list(sample_list.index), train_length))
             remaining = [e for e in list(sample_list.index) if e not in train_files]
             test_files.extend(random.sample(list(remaining), test_length))
