@@ -367,8 +367,8 @@ if __name__ == "__main__":
     parser.add_argument('-gp', '--generate_patch', default=True, action='store_true',
                         help='generate patches')
 
-    parser.add_argument('-s', '--source', default="/home/eminaga/EncryptedData/Diagnostic_image")
-    parser.add_argument('-d', '--destination', default="/home/eminaga/GPU_Server/GenHistomic")
+    parser.add_argument('-s', '--source', default="/home/eminaga/EncryptedData/Diagnostic_image/")
+    parser.add_argument('-d', '--destination', default="/home/eminaga/GPU_Server/GenHistomic/")
 
     parser.add_argument('--input_shape', default=(1024,1024), action='store_true', help="Define the input shape of the image")
     parser.add_argument('--cropping_size', default=(64, 64), action='store_true', help="Define the cropping size")
