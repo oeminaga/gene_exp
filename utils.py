@@ -1174,7 +1174,7 @@ class Filedirectoryamagement():
         import pandas as pd
         print("Loading the classification file...")
         data = pd.read_csv(class_filename, index_col=0)
-
+        print("dim: ",data.shape)
         files_indexed = {}
         for file in self.files.keys():
             str_file = os.path.splitext(file)[0]
