@@ -1182,7 +1182,7 @@ class Filedirectoryamagement():
             sample_id = sample_id.replace("-", ".")
             files_indexed[sample_id] = self.files[file]
 
-
+        print(len(files_indexed.keys()))
         #Remove rows not having the image file
         data = data.loc[files_indexed.keys(),:]
 
