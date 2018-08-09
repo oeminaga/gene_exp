@@ -884,10 +884,18 @@ class OpenSlideOnlivePatch:
             return polys
 
     def IdentifyBadImages(self, img):
-        pass
-        #grey = rgb2hsv(img)
-        #hist, xbins, ybins = np.histogram2d(h.ravel(), s.ravel(), [180, 256], [[0, 180], [0, 256]])
-        #grey[:,:,0] =
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        counts_r = hsv.shape[0] * hsv.shape[1]
+        from collections import Counter
+        cnt = Counter(hsv.flatten().tolist())
+        count_total = 0
+        for x in cnt.most_common(20):
+            count_total += x[1]
+        px_n = count_total / counts_r
+        if px_n >0.68:
+            return False
+        else:
+            return True
 
     def RandomRegionDefinition(self, mask, offset_coordination, max_patch_number, patch_size, factor=1):
         '''
@@ -903,7 +911,7 @@ class OpenSlideOnlivePatch:
         counter = 0
         #plt.imshow(mask)
         #plt.show()
-        tolerance = 500
+        tolerance = 1500
         count = 0
         patch_x_length =  int(round(patch_size[0] / factor))
         patch_y_length = int(round(patch_size[1] / factor))
@@ -936,10 +944,11 @@ class OpenSlideOnlivePatch:
                 number_positive = np.count_nonzero(binary_min)
                 percentage_positive = number_positive / total_size
                 if percentage_positive > 0.80:
-                    reg_lst.append([x, y])
-                    counter = counter + 1
+                    if self.IdentifyBadImages(image):
+                        reg_lst.append([x, y])
+                        counter = counter + 1
             if count >= tolerance:
-                print("Stopped after 500 tries...")
+                print("Stopped after 1500 tries...")
                 break
 
         print("Done: Random region definition")
