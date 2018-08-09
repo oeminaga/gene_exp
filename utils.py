@@ -1191,7 +1191,7 @@ class Filedirectoryamagement():
                 del files_indexed[key]
         #Remove rows not having the image file
         print("Select only the data of available images...")
-        data = data.iloc[files_indexed.keys()]
+        data = data.iloc[files_indexed.keys(),:]
 
         #Get the classes
         list_of_unique_value = pd.Series(data.CNV_Status, name=type_class_col).unique()
