@@ -20,7 +20,7 @@ import keras.backend as K
 def GeneratePatchImages(args):
     print("Proc: Running the patch images")
     file_manager = utils.Filedirectoryamagement(mask_directories=None, image_directories=args.source)
-    file_manager.generate_patch_images_train_valid_test(patch_per_image=128, image_patch_size=(512,512), directory=args.destination, class_filename="sample_cnv.csv", type_class_col="CNV_Status")
+    file_manager.generate_patch_images_train_valid_test(patch_per_image=128, image_patch_size=(512,512), directory=args.destination, class_filename="sample_cnv.csv", type_class_col="Cluster")
     print("Done: Patch processing...")
 
 def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=False, load_mask=False):

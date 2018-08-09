@@ -883,6 +883,10 @@ class OpenSlideOnlivePatch:
         else:
             return polys
 
+    def IdentifyBadImages(self, img):
+        grey = rgb2hsv(img)
+        hist, xbins, ybins = np.histogram2d(h.ravel(), s.ravel(), [180, 256], [[0, 180], [0, 256]])
+        grey[:,:,0] =
 
     def RandomRegionDefinition(self, mask, offset_coordination, max_patch_number, patch_size, factor=1):
         '''
