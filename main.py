@@ -15,7 +15,7 @@ import numpy as np
 import os
 import loss_functions
 import keras.backend as K
-
+import analyseimage
 
 def GeneratePatchImages(args):
     print("Proc: Running the patch images")
@@ -23,7 +23,7 @@ def GeneratePatchImages(args):
     file_manager.generate_patch_images_train_valid_test(patch_per_image=128, image_patch_size=(512,512), directory=args.destination, class_filename="sample_cnv.csv", type_class_col="Cluster")
     print("Done: Patch processing...")
 
-def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=False, load_mask=False):
+def train(args, model, Load_numpy=False, multi_gpu=False, load_augmented_data=False, load_mask=False, class_mode="categorical"):
     print('-' * 30 + 'Begin: training ' + '-' * 30)
     train_data_datagen = ImageDataGenerator()
     valid_data_datagen = ImageDataGenerator()
@@ -103,9 +103,13 @@ def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=Fal
             generate_HE=True,
             generate_LAB=True,
             max_image_number=0,
+            horizontal_flip = True,
+            zoom_range=0.2,
+            rotation_range=90.,
+            shear_range=0.2,
             target_size=args.input_shape,
             batch_size=args.batch_size,
-            class_mode='sparse')
+            class_mode=class_mode)
 
         validation_input_generator = valid_data_datagen.flow_from_directory(
             args.path_validation,
@@ -117,9 +121,13 @@ def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=Fal
             set_random_clipping=True,
             generate_HE=True,
             generate_LAB=True,
+            horizontal_flip = True,
+            zoom_range=0.2,
+            rotation_range=90.,
+            shear_range=0.2,
             target_size=args.input_shape,
             batch_size=args.batch_size,
-            class_mode='sparse')
+            class_mode=class_mode)
 
     print("Done: Image lists are created...")
     # callbacks
@@ -136,7 +144,6 @@ def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=Fal
                                                save_best_only=True, save_weights_only=True, verbose=1,
                                                multi_gpu_mode=multi_gpu, name_of_model="model_1")
     print("Done: callbacks are created...")
-    class_weights = np.array([2.0, 1, 2.3])
     # compile the modelg
     # , self.precision, self.recall, "acc",
     print("Proc: Compile the model...")
@@ -145,15 +152,6 @@ def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=Fal
                   metrics={'ucnet': ['acc', metrics.precision, metrics.recall, metrics.dice_coef]},
                   loss_weights=[1., args.lam_recon])
 
-    '''
-    model.compile(optimizer=optimizers.Adadelta(lr=args.args.lr),
-                      loss=[loss_functions.weighted_categorical_crossentropy(class_weights)],
-                      # ["categorical_crossentropy"],  # self.iou_loss
-                      # sample_weight_mode="temporal",
-                      metrics=['acc', metrics.precision,
-                               metrics.recall, metrics.jaccard_distance]
-                      )
-    '''
     print("Done: the model was complied...")
     print("Proc: Training the model...")
     # Training with data augmentation
@@ -162,13 +160,13 @@ def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=Fal
         valid_steps_per_epoch = np.math.ceil(valid_img_dataset.shape[0] / args.batch_size)
 
         model.fit_generator(
-            generator=utils.image_generator_flow(train_input_generator, reconstruction=False, reshape=True,
+            generator=utils.image_generator_flow(train_input_generator, reconstruction=False, reshape=False,
                                                     generate_weight=False, run_one_vs_all_mode=False),
             steps_per_epoch=train_steps_per_epoch,
             epochs=args.epochs,
             use_multiprocessing=True,
             validation_steps=valid_steps_per_epoch,
-            validation_data=utils.image_generator_flow(valid_input_generator, reconstruction=False, reshape=True,
+            validation_data=utils.image_generator_flow(valid_input_generator, reconstruction=False, reshape=False,
                                                           generate_weight=False, run_one_vs_all_mode=False),
             callbacks=[log, tb, checkpoint, reduce_lr])  # lr_decay
 
@@ -190,9 +188,6 @@ def train(args, model, Load_numpy=True, multi_gpu=False, load_augmented_data=Fal
 
     # serialize weights to HDF5
     model.save(args.save_dir + '/trained_model.h5')
-
-    # print("Saved model to disk")
-
     # model.evaluate_generator
     # from utils import plot_log
     # plot_log(args.save_dir + '/log.csv', show=True)
@@ -208,19 +203,12 @@ def Run(args, parallel=True):
             # config.gpu_options.allow_growth = True
             # set_session(tf_X.Session(config=config))
 
-            model, eval_model = GeneExpressionLevel.UNetCapsuleNetClippedModel(n_class=args.nb_class,
-                                                                routing=args.routings,
-                                                                dim_capsule=args.dim_capsule,
-                                                                n_channels=args.n_channels
-                                                                )
+            model, eval_model = GeneExpressionLevel.UNetCapsuleNetClippedModel(n_class=args.nb_class)
             # model = eval_model
             model.summary()
     else:
 
-        model, eval_model = GeneExpressionLevel.UNetCapsuleNetClippedModel(n_class=args.nb_class,
-                                                            routing=args.routings,
-                                                            dim_capsule=args.dim_capsule,
-                                                            n_channels=args.n_channels)
+        model, eval_model = GeneExpressionLevel.UNetCapsuleNetClippedModel(n_class=args.nb_class)
 
     from keras.models import model_from_json, load_model
     # ------------ save the template model rather than the gpu_mode ----------------
@@ -310,7 +298,6 @@ def test(model,Onlive, image_source, args):
             analyseimage.PredictImage(model, filname_img, id_, "./" + filname + "_heatmap.png", 40,
                               normalization_color = args.color, target_size=target_size, nb_class=args.nb_class, batch_size=args.batch_size )
         return print("Done")
-    #TODO: Provide another solution
 
 if __name__ == "__main__":
     print("Starting...")

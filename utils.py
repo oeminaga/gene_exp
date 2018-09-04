@@ -4,6 +4,8 @@
 #####
 
 import os
+from typing import List
+
 import numpy as np
 import cv2
 import csv
@@ -12,6 +14,8 @@ import math
 
 from PIL import Image
 import xml.etree.ElementTree as ET
+
+from numpy.core.multiarray import ndarray
 from openslide import OpenSlide
 import keras.backend as K
 import random
@@ -492,7 +496,7 @@ def image_generator(generator, use_cropping=False, input_shape=(256, 256, 3), cr
                                  (int(round(cropping_size[0] / 4.)), int(round(cropping_size[1] / 4.))))
             # Generate image patches with different off set
             for coord in coordinations:
-                itm_list_coordination = self.CropLayers(input_shape=input_shape, cropping_size=cropping_size,
+                itm_list_coordination = CropLayers(input_shape=input_shape, cropping_size=cropping_size,
                                                         off_set=coord)
                 # Get the image patches
                 for itm in itm_list_coordination:
@@ -515,13 +519,13 @@ def image_generator(generator, use_cropping=False, input_shape=(256, 256, 3), cr
         # print(x_batch_cropped.shape)
         # Generate batch to deliver
         length_b = x_batch_cropped.shape[0]
-        sequence = int(round(length_b / self.args.batch_size))
+        sequence = int(round(length_b / batch_size))
         if test_mode and use_cropping:
             yield x_batch_cropped, y_batch_cropped, itm_list_coordination
         else:
             for range_x in range(0, sequence):
-                begin_index = range_x * self.args.batch_size
-                end_index = (range_x + 1) * self.args.batch_size
+                begin_index = range_x * batch_size
+                end_index = (range_x + 1) * batch_size
 
                 if ((range_x + 1) == sequence):
                     end_index = length_b
@@ -600,7 +604,7 @@ def image_generator(generator, use_cropping=False, input_shape=(256, 256, 3), cr
 
 #End General function
 class OpenSlideOnlivePatch:
-    def __init__(self, image_folder, mask_folder=None, select_criteria=None, clipped=False, zooming_level=40, target_zooming=40, annotation_zooming_level=10, split_text_annotation=""):
+    def __init__(self, image_folder, mask_folder=None, select_criteria=None, clipped=False, zooming_level=10, target_zooming=10, annotation_zooming_level=10, split_text_annotation=""):
         '''
         :param image_folder: Define the directory for extracted images. This directory should exist before running any function in this class! -Mandatory parameter-
         :param mask_folder: Define the directory for generated mask. This directory should exist before running any function in this class!
@@ -612,7 +616,7 @@ class OpenSlideOnlivePatch:
         :param split_text_annotation: Define the text or char to split the context of the label. Default: ""
         '''
         self.zooming_level = zooming_level
-        self.split_text_annotion = split_text_annotation
+        self.split_text_annotation = split_text_annotation
         self.select_criteria = select_criteria
         self.image_folder = image_folder
         self.mask_folder = mask_folder
@@ -621,7 +625,6 @@ class OpenSlideOnlivePatch:
         self.target_zooming = target_zooming
         self.factor_for_mask = self.target_zooming / self.annotation_zooming_level
         self.factor = self.target_zooming / self.zooming_level
-
 
     def GetTheMaxSizeOfRectangleOfEachPolygons(self, polygons):
         RectMaxOfEachPolygons = []
@@ -636,19 +639,22 @@ class OpenSlideOnlivePatch:
             RectMaxOfEachPolygons.append([X_min, Y_min, width_, Height_])
         return RectMaxOfEachPolygons
 
-    def GetImagePatchOnlive(self, image, regionofinterest, level=0):
+    def GetImagePatchOnlive(self, image, regionofinterest, level=0, correct_region_by_factor=False):
         '''
         :param image: Openslide object (You create this object when you call LoadImage.
         :param regionofinterest: Define the rectangle of the region of interest [X,Y, width, height]
         :param level: Determine the image level you want to consider. O = the lowest level.
         :return: A PIL Image
         '''
-        regionofinterest_T = regionofinterest * self.factor_for_mask
-        regionofinterest_T = np.around(regionofinterest_T, decimals=0)
+        if correct_region_by_factor:
+            regionofinterest_T = [i * self.factor_for_mask for i in regionofinterest]
+            regionofinterest_T = [int(round(i)) for i in regionofinterest_T]
+        else:
+            regionofinterest_T = regionofinterest
+        print(regionofinterest_T)
         org_img = image.read_region(location=(regionofinterest_T[0], regionofinterest_T[1]), level=0,
                                     size=(regionofinterest_T[2], regionofinterest_T[3]))
-        crop_img = np.asarray(org_img)
-        return crop_img
+        return org_img
 
     def LoadImage(self, filename):
         '''
@@ -672,6 +678,10 @@ class OpenSlideOnlivePatch:
 
         polygons = self.ExtractPolygons(ET.parse(filename).getroot(), return_identity_list=return_identity_list, LoadAll=LoadAll, select_criteria=self.select_criteria)
         return polygons
+
+    def SimpleLoadMask(self, filename):
+        list_x, polygons = self.GetLesionANDIdentity(ET.parse(filename).getroot())
+        return list_x, polygons
 
     def _GettissueArea(self,level=3):
         heighest_level = len(self.image.level_dimensions) -1
@@ -707,7 +717,6 @@ class OpenSlideOnlivePatch:
         tissues = morphology.opening(tissues, square(2))
         #cv2.imwrite("./tissue.png", tissues * 255.)
         return tissues
-
 
     def MaxRegion(self, regions):
         rx = None
@@ -760,7 +769,7 @@ class OpenSlideOnlivePatch:
         print("factors: ",level_factor)
         return level_0,  rect, level_factor[0]
 
-    def GetLesionIdentity(self, xml_root, AttributeParameter="Description", AttributeValue="LCM"):
+    def GetLesionIdentity(xml_root, AttributeParameter="Description", AttributeValue="LCM"):
         '''
         :param xml_root:
         :param AttributeParameter: define the attribute name to be looked in (XML Element Attributes in SVS annotation file)
@@ -771,30 +780,99 @@ class OpenSlideOnlivePatch:
         id_list = []
         finding_name = ""
         Go_next_step = False
+
         for annot in annots:
             for child in annot:
                 if child.tag == 'Attributes':
+                    Go_next_step = False
                     c_d = child
                     for at in c_d:
                         if (at.tag == 'Attribute'):
-                            if (AttributeParameter in at.attrib):
+                            if (AttributeParameter in at.attrib['Name']):
+
                                 m_value = at.attrib['Value']
+                                # print(m_value)
                                 if m_value.lower() == AttributeValue.lower():
-                                    finding_name = AttributeValue
+                                    Go_next_step = True
+                                    # print(Go_next_step)
                                     break
                                 else:
                                     finding_name = ""
-
-                if child.tag == 'Regions':
+                if child.tag == 'Regions' and Go_next_step:
                     regions = child
                     for region in regions:
                         if region.tag == 'Region':
                             text_description = region.attrib['Text']
+                            # print(text_description)
                             # Add the attribute from the major location
                             if (text_description == ""):
-                                text_description = finding_name
+                                for at in region:
+                                    if (at.tag == 'Attributes'):
+                                        for at_a in at:
+                                            if (at_a.tag == 'Attribute'):
+                                                m_vle = at_a.attrib['Value']
+                                                if m_vle is not "":
+                                                    text_description = m_vle
                             id_list.append(text_description)
         return id_list
+
+    def GetLesionANDIdentity(self, xml_root, AttributeParameter="Description", AttributeValue="LCM"):
+        '''
+        :param xml_root:
+        :param AttributeParameter: define the attribute name to be looked in (XML Element Attributes in SVS annotation file)
+        :param AttributeValue: Select only items ordered under this value.
+        :return: a list of lesion identity
+        '''
+        annots = xml_root
+        print(annots)
+        id_list = []
+        polys = []
+        finding_name = ""
+        Go_next_step = False
+        LoadOnlyPoints = True
+        for annot in annots:
+            for child in annot:
+                if child.tag == 'Attributes':
+                    Go_next_step = False
+                    c_d = child
+                    for at in c_d:
+                        if (at.tag == 'Attribute'):
+                            if (AttributeParameter in at.attrib['Name']):
+
+                                m_value = at.attrib['Value']
+                                # print(m_value)
+                                if m_value.lower() == AttributeValue.lower():
+                                    Go_next_step = True
+                                    # print(Go_next_step)
+                                    break
+                                else:
+                                    finding_name = ""
+                if child.tag == 'Regions' and Go_next_step:
+                    regions = child
+                    for region in regions:
+                        if region.tag == 'Region':
+                            text_description = region.attrib['Text']
+                            # print(text_description)
+                            # Add the attribute from the major location
+                            if (text_description == ""):
+                                for at in region:
+                                    if (at.tag == 'Attributes'):
+                                        for at_a in at:
+                                            if (at_a.tag == 'Attribute'):
+                                                m_vle = at_a.attrib['Value']
+                                                if m_vle is not "":
+                                                    text_description = m_vle
+                            id_list.append(text_description)
+                            for at in region:
+                                if at.tag == 'Vertices':
+                                    vertices = at
+                                    pts = []
+                                    for vertex in vertices:
+                                        pts.append([int(round(float(vertex.attrib['X']))), int(round(float(vertex.attrib['Y'])))])
+                                    pts = np.array([pts], np.int32)
+
+                                    polys.append(pts)
+        return id_list, polys
 
     def ExtractPolygons(self, xml_root, LoadAll=True, LoadOnlyPoints=True,AttributeParameter="Description", IgnoreLesionsWithNoDescription=True, AttributeValue="LCM", select_criteria=None, return_identity_list=False):
         '''
@@ -841,8 +919,9 @@ class OpenSlideOnlivePatch:
                                 text_description = finding_name
                             list_of_words_to_look = [text_description]
                             if (self.split_text_annotation != ""):
-                                parameters = text_description.split(self.split_text_annotation)
-                                list_of_words_to_look = parameters
+                                if text_description is not None:
+                                    parameters = text_description.split(self.split_text_annotation)
+                                    list_of_words_to_look = parameters
                                 # Debug: print(list_of_words_to_look)
 
                             for word_to_look in list_of_words_to_look:
@@ -896,6 +975,8 @@ class OpenSlideOnlivePatch:
             return False
         else:
             return True
+
+
 
     def RandomRegionDefinition(self, mask, offset_coordination, max_patch_number, patch_size, factor=1):
         '''
@@ -988,8 +1069,36 @@ class OpenSlideOnlivePatch:
             img.save(tmp_x_file_path)
         print("Done: Patch images")
 
-
     # Begin: Major functions (Also an example use for other functions listed above)
+    def CreateROIToStoreAsFiles(self, filename,annotation_file, img_dir_to_store):
+        '''
+            :param filename: the file path for the histology images supported by OpenSlide
+            :param annotation_file: the annotation file path: It should be a XML file stored in a ImageScope format
+            :param Debug: Not active
+            :return: A log_report in numpy format.
+        '''
+        OpenSlide_obj = self.LoadImage(filename)
+        file_ex = os.path.basename(filename)
+        file_to_use = os.path.splitext(file_ex)[0]
+        identities, polygons = self.SimpleLoadMask(annotation_file)
+        rectangles = self.GetTheMaxSizeOfRectangleOfEachPolygons(polygons)
+        counter = 0
+        for rect, polygon, id_itm in zip(rectangles, polygons, identities):
+            # Define the filename
+            file_name_to_store = file_to_use + "_" + id_itm + "_"+ str(counter) + ".png"
+            # Scale the polygon and the mask image
+            rect_new = rect #*self.factor_for_mask
+            rect_new = np.around(rect_new, decimals=0)
+            maskimage = np.zeros((rect_new[3], rect_new[2]), dtype=np.uint8)
+
+            polygon_new = polygon #*1 #* self.factor_for_mask
+            polygon_new = np.around(polygon_new, decimals=0)
+            cv2.fillPoly(maskimage, polygon_new, color=1)
+            counter += 1
+            img = self.GetImagePatchOnlive(OpenSlide_obj, rect, level=0)
+            file_img = os.path.join(img_dir_to_store, file_name_to_store)
+            img.save(file_img)
+
     def CreatePatchesToStoreAsFiles(self, filename, annotation_file):
         '''
         :param filename: the file path for the histology images supported by OpenSlide
@@ -1012,7 +1121,7 @@ class OpenSlideOnlivePatch:
             file_name_to_store = file_to_use + "_" + id_itm + ".png"
 
             # Create mask
-            # Numpy dim format: Height, width --> Check this, it works weird sometimes.
+            # Numpy dim format: Height, width --> Check this.
 
             # Scale the polygon and the mask image
             rect_new = rect * self.factor_for_mask
@@ -1102,7 +1211,8 @@ class OpenSlideOnlivePatch:
     # End Major functions
 
 class Filedirectoryamagement():
-    def __init__(self, mask_directories, image_directories, image_extension=[".svs", ".tiff"], mask_extension=[".xml"]):
+    def __init__(self, mask_directories, image_directories, image_extension = [".svs", ".tiff"],
+                 mask_extension = [".xml"]):
         '''
         :param mask_directories:
         :param image_directories:
@@ -1159,6 +1269,15 @@ class Filedirectoryamagement():
             file_shuffle[key] = self.files[key]
         self.files = file_shuffle
         #print(self.files)
+
+    def ExtractROI(self, img_dir_to_store):
+        for file in self.files.keys():
+            img_file = self.files[file]
+            xml_file = file
+            print("Proc:", img_file)
+            openslide = OpenSlideOnlivePatch(self.image_directories, self.mask_directories)
+            openslide.CreateROIToStoreAsFiles(img_file, xml_file,img_dir_to_store)
+            print("Done.")
 
     def GenerateKFoldValidation(self, k=5):
         from sklearn.model_selection import KFold
