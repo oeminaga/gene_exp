@@ -1,6 +1,5 @@
 from keras import layers
 import keras
-import keras_preprocessing
 import keras.backend as K
 from keras import layers, models, optimizers
 from keras.layers.merge import concatenate

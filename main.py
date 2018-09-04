@@ -16,7 +16,8 @@ import os
 import loss_functions
 import keras.backend as K
 import analyseimage
-
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 def GeneratePatchImages(args):
     print("Proc: Running the patch images")
     file_manager = utils.Filedirectoryamagement(mask_directories=None, image_directories=args.source)
@@ -370,12 +371,6 @@ if __name__ == "__main__":
 
         GeneratePatchImages(args)
     else:
-        Run(args, parallel=args.parallel)
         if not os.path.exists(args.save_dir):
             os.makedirs(args.save_dir)
-
-
-
-
-
-
+            Run(args, parallel=args.parallel)
