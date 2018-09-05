@@ -26,8 +26,8 @@ def GeneratePatchImages(args):
 
 def train(args, model, Load_numpy=False, multi_gpu=False, load_augmented_data=False, load_mask=False, class_mode="categorical"):
     print('-' * 30 + 'Begin: training ' + '-' * 30)
-    train_data_datagen = ImageDataGenerator(horizontal_flip=True, zoom_range=0.2, rotation_range=90., shear_range=0.2)
-    valid_data_datagen = ImageDataGenerator(horizontal_flip=True, zoom_range=0.2, rotation_range=90., shear_range=0.2)
+    train_data_datagen = ImageDataGenerator()#horizontal_flip=True, zoom_range=0.2, rotation_range=90., shear_range=0.2)
+    valid_data_datagen = ImageDataGenerator()#horizontal_flip=True, zoom_range=0.2, rotation_range=90., shear_range=0.2)
     seed = 1
     # Prepare generators..
     if (load_augmented_data):
