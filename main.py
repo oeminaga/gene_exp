@@ -306,7 +306,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', default=0.1, type=float,
                         help="Initial learning rate")
     parser.add_argument('--nb_class', '-n', default=3, type=int, help="the number of the classes")
-    parser.add_argument('--path_validation', default="/home/eminaga/GenHistomic/valid",
+    parser.add_argument('--path_validation', default="/home/eminaga/GenHistomic/valid/",
                         help="images for validation")
     parser.add_argument('--path_train', default="/home/eminaga/GenHistomic/train/",
                         help="images for training")
