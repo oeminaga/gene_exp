@@ -314,11 +314,11 @@ if __name__ == "__main__":
     parser.add_argument('--lr', default=0.1, type=float,
                         help="Initial learning rate")
     parser.add_argument('--nb_class', '-n', default=3, type=int, help="the number of the classes")
-    parser.add_argument('--path_validation', default="/home/eminaga/Challenges/nucleus/valid",
+    parser.add_argument('--path_validation', default="/home/eminaga/GenHistomic/valid",
                         help="images for validation")
-    parser.add_argument('--path_train', default="/home/eminaga/Challenges/nucleus/wtrain",
+    parser.add_argument('--path_train', default="/home/eminaga/GenHistomic/train/",
                         help="images for training")
-    parser.add_argument('--path_test', default="/Data/ToStudy_PRAD_20x/test/",
+    parser.add_argument('--path_test', default="/home/eminaga/GenHistomic/test/",
                         help="images for test")
     parser.add_argument('--lr_decay', default=0.999, type=float,
                         help="The value multiplied by lr at each epoch. Set a larger value for larger epochs")
