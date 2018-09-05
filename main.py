@@ -354,7 +354,7 @@ if __name__ == "__main__":
     parser.add_argument('--cropping_size', default=(64, 64), action='store_true', help="Define the cropping size")
     parser.add_argument('--filename', default="", help="Define the filename for the test")
     parser.add_argument('--change_lr_threshold', default=5, type=int, help="When to change the learning rate. The epoche number is given.")
-    #change_lr_threshold
+
     args = parser.parse_args()
 
     print(args)
@@ -364,4 +364,4 @@ if __name__ == "__main__":
     else:
         if not os.path.exists(args.save_dir):
             os.makedirs(args.save_dir)
-            Run(args, parallel=args.parallel)
+        Run(args, parallel=args.parallel)
