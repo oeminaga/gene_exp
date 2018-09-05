@@ -148,9 +148,9 @@ class GeneExpressionLevel():
         noise = layers.Input(shape=(n_class, dim_capsule))
         noised_digitcaps = layers.Add()([digitcaps, noise])
         masked_noised_y = custom_layers.Mask()([noised_digitcaps, y])
-        manipulate_model = models.Model([x, y, noise], decoder(masked_noised_y))
+        #manipulate_model = models.Model([x, y, noise], decoder(masked_noised_y))
 
-        return train_model, eval_model, manipulate_model
+        return train_model, eval_model#, manipulate_model
 
     def UNetCapsuleNetClippedModel(self, n_class=3, number_of_channel=3):
         shape_default = (self.input_shape[0], self.input_shape[1], number_of_channel)
