@@ -152,7 +152,7 @@ class GeneExpressionLevel():
 
         return train_model, eval_model#, manipulate_model
 
-    def UNetCapsuleNetClippedModel(self, n_class=3, number_of_channel=3):
+    def UNetCapsuleNetClippedModel(self, n_class=4, number_of_channel=3):
         shape_default = (self.input_shape[0], self.input_shape[1], number_of_channel)
         x = layers.Input(shape=shape_default)
 

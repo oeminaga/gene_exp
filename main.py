@@ -250,9 +250,9 @@ def Run(args, parallel=True):
             plot_model(multi_model, to_file=args.save_dir + '/model_parallel.png', show_shapes=True)
 
             multi_model.summary()
-            model = train(model=multi_model, multi_gpu=parallel, load_augmented_data=args.load_augmented_data)
+            model = train(args=args, model=multi_model, multi_gpu=parallel, load_augmented_data=args.load_augmented_data)
         else:
-            model = train(model=model, multi_gpu=parallel, load_augmented_data=args.load_augmented_data)
+            model = train(args=args, model=model, multi_gpu=parallel, load_augmented_data=args.load_augmented_data)
 
         file_name_weight = utils.GetLastWeight(args.save_dir)
         # eval_model = model
