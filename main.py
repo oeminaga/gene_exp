@@ -333,7 +333,7 @@ if __name__ == "__main__":
                         help="Save weights by TensorBoard")
     parser.add_argument('--gpu', default=3, type=float, help="the number of gpus.")
     parser.add_argument('--save_dir', default='./result')
-    parser.add_argument('--use_cropping', default=0, type=int,
+    parser.add_argument('--use_cropping', default=1, type=int,
                         help="Apply the cropping function")
     parser.add_argument('-t', '--testing', default=False, action='store_true',
                         help="Test the trained model on testing dataset")
