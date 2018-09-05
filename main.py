@@ -352,7 +352,7 @@ if __name__ == "__main__":
     parser.add_argument('-w', '--weights', default=None,
                         help="The path of the saved weights. Should be specified when testing")
 
-    parser.add_argument('-gp', '--generate_patch', default=False, action='store_true',
+    parser.add_argument('-gp', '--generate_patch', default=False,
                         help='generate patches')
 
     parser.add_argument('-s', '--source', default="/home/eminaga/EncryptedData/Diagnostic_image/")
