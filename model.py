@@ -10,6 +10,7 @@ import loss_functions
 import custom_layers
 import numpy as np
 import tensorflow as tf_X
+import utils
 from keras.utils.vis_utils import plot_model
 from keras.preprocessing.image import ImageDataGenerator
 from keras import callbacks
@@ -151,7 +152,7 @@ class GeneExpressionLevel():
 
         # 56x56 Level 3
         n_filter = 512
-        conv_level_3 = self.Conv2DBNSLU(x=x, filters=32, kernel_size=1, strides=1,
+        conv_level_3 = utils.Conv2DBNSLU(x=x, filters=32, kernel_size=1, strides=1,
                                         padding='valid', activation='selu', name='conv_level_3_0')
 
         print(conv_level_3.shape)
