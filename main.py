@@ -197,6 +197,7 @@ def train(args, model, Load_numpy=False, multi_gpu=False, load_augmented_data=Fa
     return model
 
 def Run(args, parallel=True):
+    GE = GeneExpressionLevel(args)
     if (parallel):
         with tf_X.device('/cpu:0'):
             # config = tf_X.ConfigProto()
@@ -204,12 +205,12 @@ def Run(args, parallel=True):
             # config.gpu_options.allow_growth = True
             # set_session(tf_X.Session(config=config))
 
-            model, eval_model = GeneExpressionLevel.UNetCapsuleNetClippedModel(n_class=args.nb_class)
+            model, eval_model = GE.UNetCapsuleNetClippedModel(n_class=args.nb_class)
             # model = eval_model
             model.summary()
     else:
 
-        model, eval_model = GeneExpressionLevel.UNetCapsuleNetClippedModel(n_class=args.nb_class)
+        model, eval_model = GE.UNetCapsuleNetClippedModel(n_class=args.nb_class)
 
     from keras.models import model_from_json, load_model
     # ------------ save the template model rather than the gpu_mode ----------------

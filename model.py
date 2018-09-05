@@ -32,18 +32,23 @@ class GeneExpressionLevel():
 
         return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
-    def __init__(self, directory_image, directory_mask, input_shape, result_directory, batch_size, epoch, cropping_size=None, presizeloading=None):
-        self.directory_image = directory_image
-        self.directory_mask = directory_mask
-        self.input_shape = input_shape
-        self.result_directory = result_directory
-        self.batch_size = batch_size
-        self.epoch = epoch
-        self.original_dim = input_shape[0] * input_shape[1] * input_shape[2]
-        self.patch_size_loading = presizeloading
-        self.cropping_size = cropping_size
+    def __init__(self,args):
+        self.args = args
+        self.input_shape = args.input_shape
+        self.cropping_size = args.cropping_size
 
+    #def __init__(self, directory_image, directory_mask, input_shape, result_directory, batch_size, epoch, cropping_size=None, presizeloading=None):
+    #    self.directory_image = directory_image
+    #    self.directory_mask = directory_mask
+    #    self.input_shape = input_shape
+    #    self.result_directory = result_directory
+    #    self.batch_size = batch_size
+    #    self.epoch = epoch
+    #    self.original_dim = input_shape[0] * input_shape[1] * input_shape[2]
+    #    self.patch_size_loading = presizeloading
+    #    self.cropping_size = cropping_size
 
+    '''
     def CoreModel(self, inputs=None):
         intermediate_dim = 512
         latent_dim = 2
@@ -80,6 +85,7 @@ class GeneExpressionLevel():
         outputs = decoder(encoder(inputs)[2])
         vae = keras.Model(inputs, outputs, name='vae_mlp')
         return vae
+    '''
 
     def CapsuleNetClippedModel(self, n_class=2, routing=3, dim_capsule=8, n_channels=32):
         shape_default = (self.input_shape[0], self.input_shape[1], 2)
